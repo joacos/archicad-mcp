@@ -1,0 +1,16 @@
+{
+  "name": "archicad-mcp",
+  "owner": {
+    "name": "joacos"
+  },
+  "plugins": [
+    {
+      "name": "archicad-tapir",
+      "source": "./",
+      "description": "Control a running Archicad from Claude through the JSON API and the Tapir add-on"
+    }
+  ],
+  "metadata": {
+    "description": "Archicad control for Claude via the JSON API and Tapir"
+  }
+}

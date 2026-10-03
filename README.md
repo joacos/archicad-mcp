@@ -16,6 +16,17 @@ Desde la carpeta de este proyecto:
 python -m pip install .
 ```
 
+## Instalación como plugin de Claude
+
+En Claude Code, sin instalar nada a mano (requiere [uv](https://docs.astral.sh/uv/)):
+
+```
+/plugin marketplace add joacos/archicad-mcp
+/plugin install archicad-tapir@archicad-mcp
+```
+
+El plugin arranca el servidor con `uvx` desde este repositorio. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
+
 ## Configuración en Claude Desktop
 
 Editá `claude_desktop_config.json` (Configuración > Desarrollador > Editar configuración) y agregá:
