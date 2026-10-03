@@ -7,6 +7,7 @@ name = "archicad-tapir-mcp"
 version = "0.1.0"
 description = "MCP server that lets Claude control Archicad through the JSON API and the Tapir add-on"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = ["mcp>=2.2,<3", "jsonschema>=4.18"]
 

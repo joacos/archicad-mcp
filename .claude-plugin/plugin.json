@@ -4,5 +4,6 @@
   "description": "Control a running Archicad from Claude through the JSON API and the Tapir add-on",
   "author": { "name": "joacos" },
   "repository": "https://github.com/joacos/archicad-mcp",
+  "license": "MIT",
   "keywords": ["archicad", "tapir", "bim", "mcp"]
 }
