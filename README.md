@@ -65,7 +65,7 @@ Las cuatro tools `archicad_model_summary`, `archicad_list_elements`, `archicad_q
 
 | Variable | Valor por defecto | Uso |
 | --- | --- | --- |
-| `ARCHICAD_MCP_TOOLS` | `curated` | `all` expone los ~250 comandos como tools; `none` deja solo las genéricas; también acepta una lista separada por comas de comandos o grupos, por ejemplo `curated,Navigator,Issue`. |
+| `ARCHICAD_MCP_TOOLS` | `curated` | `all` expone los ~250 comandos como tools; `none` deja solo las genéricas. |
 | `ARCHICAD_MCP_READ_ONLY` | apagado | Con `1`, rechaza todo comando que pueda modificar el modelo. |
 | `ARCHICAD_PORT` | autodetección | Fija el puerto si tenés varios Archicad abiertos. |
 | `ARCHICAD_HOST` | `127.0.0.1` | Host de Archicad. |

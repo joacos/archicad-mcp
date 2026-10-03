@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import copy
 import json
+import re
 from dataclasses import dataclass
 from importlib import resources
 from typing import Any
@@ -48,25 +48,6 @@ CURATED_COMMANDS = [
 READ_ONLY_PREFIXES = ("Get", "Filter")
 # Commands named Get* that change state or block on the user.
 NOT_READ_ONLY = {"GetPointFromUser", "GetScriptUIResult"}
-DESTRUCTIVE_PREFIXES = ("Delete", "Remove", "Set", "Modify", "Update", "Move", "Import", "Trim")
-# Commands matching a destructive prefix that only change the UI state.
-NOT_DESTRUCTIVE = {"SetViewRotation", "Set3DCutPlanes", "SetSuspendGroupsMode", "SetElementNotificationClient"}
-DESTRUCTIVE_COMMANDS = {
-    "QuitArchicad",
-    "OpenProject",
-    "CloseProject",
-    "SaveProject",
-    "ReloadLibraries",
-    "UnlockElements",
-    "TeamworkSend",
-    "TeamworkReceive",
-    "ReleaseElements",
-    "ConnectMEPElements",
-    "RenameFavorites",
-    "RenameNavigatorItem",
-    "PublishPublisherSet",
-    "IFCFileOperation",
-}
 
 
 @dataclass
@@ -82,13 +63,6 @@ class Command:
     def read_only(self) -> bool:
         return self.name.startswith(READ_ONLY_PREFIXES) and self.name not in NOT_READ_ONLY
 
-    @property
-    def destructive(self) -> bool:
-        return not self.read_only and (
-            (self.name.startswith(DESTRUCTIVE_PREFIXES) and self.name not in NOT_DESTRUCTIVE)
-            or self.name in DESTRUCTIVE_COMMANDS
-        )
-
 
 def parse_version(text: str | None) -> tuple[int, ...] | None:
     try:
@@ -97,28 +71,16 @@ def parse_version(text: str | None) -> tuple[int, ...] | None:
         return None
 
 
-def _collect_refs(node: Any, found: set[str]) -> None:
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key == "$ref" and isinstance(value, str):
-                found.add(value.split("/")[-1])
-            else:
-                _collect_refs(value, found)
-    elif isinstance(node, list):
-        for item in node:
-            _collect_refs(item, found)
+_REF = re.compile(r'"\$ref": "[^"]*?([^"/]+)"')
+
+
+def _refs(node: Any) -> set[str]:
+    return set(_REF.findall(json.dumps(node)))
 
 
 def _rewrite_refs(node: Any) -> Any:
     """Turns Tapir's "#/Name" references into standard "#/$defs/Name" ones."""
-    if isinstance(node, dict):
-        return {
-            key: ("#/$defs/" + value.split("/")[-1] if key == "$ref" and isinstance(value, str) else _rewrite_refs(value))
-            for key, value in node.items()
-        }
-    if isinstance(node, list):
-        return [_rewrite_refs(item) for item in node]
-    return node
+    return json.loads(_REF.sub(r'"$ref": "#/$defs/\1"', json.dumps(node)))
 
 
 class Catalog:
@@ -126,7 +88,6 @@ class Catalog:
         self.tapir_version: str = data.get("tapirVersion", "?")
         self.definitions: dict[str, Any] = data["definitions"]
         self.commands: dict[str, Command] = {}
-        self._input_schemas: dict[str, dict[str, Any]] = {}
         self.groups: dict[str, list[str]] = {}
         for group in data["groups"]:
             self.groups[group["name"]] = [c["name"] for c in group["commands"]]
@@ -159,24 +120,19 @@ class Catalog:
     def _with_defs(self, schema: dict[str, Any]) -> dict[str, Any]:
         """Returns a self-contained schema carrying only the definitions it uses."""
         needed: set[str] = set()
-        pending = set()
-        _collect_refs(schema, pending)
+        pending = _refs(schema)
         while pending:
             name = pending.pop()
-            if name in needed:
-                continue
-            needed.add(name)
-            _collect_refs(self.definitions.get(name, {}), pending)
-        result = _rewrite_refs(copy.deepcopy(schema))
+            if name not in needed:
+                needed.add(name)
+                pending |= _refs(self.definitions.get(name, {}))
+        result = _rewrite_refs(schema)
         if needed:
             result["$defs"] = {name: _rewrite_refs(self.definitions[name]) for name in sorted(needed)}
         return result
 
     def input_schema(self, name: str) -> dict[str, Any]:
         """The command's input schema, shaped as an MCP tool input schema."""
-        cached = self._input_schemas.get(name)
-        if cached is not None:
-            return cached
         raw = self.commands[name].raw_input_schema
         if not raw:
             schema: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -185,7 +141,6 @@ class Catalog:
         else:
             # A bare $ref at the root: MCP requires "type": "object" there.
             schema = self._with_defs({"type": "object", "allOf": [raw]})
-        self._input_schemas[name] = schema
         return schema
 
     def output_schema(self, name: str) -> dict[str, Any] | None:

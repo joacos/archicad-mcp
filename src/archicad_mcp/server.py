@@ -15,8 +15,7 @@ Tools:
 
 Environment variables:
   ARCHICAD_HOST, ARCHICAD_PORT, ARCHICAD_TIMEOUT: connection settings.
-  ARCHICAD_MCP_TOOLS: "curated" (default), "all", "none", or a comma
-    separated list of Tapir command and group names.
+  ARCHICAD_MCP_TOOLS: "curated" (default), "all" or "none".
   ARCHICAD_MCP_READ_ONLY=1: refuse every command that is not read-only.
   ARCHICAD_MCP_MAX_CHARS: maximum length of a tool response (default 100000).
   ARCHICAD_MCP_JOURNAL: journal file for archicad_undo (default ~/.archicad-mcp/journal.json).
@@ -59,93 +58,77 @@ angles in radians. Ask the user before deleting elements or making large
 changes to their model.
 """
 
+def tool(name: str, description: str, schema: dict[str, Any], **hints: Any) -> types.Tool:
+    return types.Tool(
+        name=name,
+        description=description,
+        input_schema=schema,
+        annotations=types.ToolAnnotations(open_world_hint=False, **hints),
+    )
+
+
+def object_schema(required: list[str] | None = None, **properties: Any) -> dict[str, Any]:
+    schema: dict[str, Any] = {"type": "object", "properties": properties, "additionalProperties": False}
+    if required:
+        schema["required"] = required
+    return schema
+
+
 GENERIC_TOOLS = [
-    types.Tool(
-        name="archicad_status",
-        description="Lists the running Archicad instances (port, version) and whether the Tapir add-on answers.",
-        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
-        annotations=types.ToolAnnotations(read_only_hint=True, open_world_hint=False),
+    tool(
+        "archicad_status",
+        "Lists the running Archicad instances (port, version) and whether the Tapir add-on answers.",
+        object_schema(),
+        read_only_hint=True,
     ),
-    types.Tool(
-        name="tapir_list_commands",
-        description="Lists Tapir commands with a one-line description, optionally filtered by group name or text.",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "group": {"type": "string", "description": "Part of a group name, e.g. 'Element', 'Property', 'Navigator'."},
-                "search": {"type": "string", "description": "Text to look for in the command name or description."},
-            },
-            "additionalProperties": False,
-        },
-        annotations=types.ToolAnnotations(read_only_hint=True, open_world_hint=False),
-    ),
-    types.Tool(
-        name="tapir_describe_command",
-        description="Returns the input and output JSON schemas of a Tapir command. Read this before tapir_run_command.",
-        input_schema={
-            "type": "object",
-            "properties": {"command": {"type": "string", "description": "Tapir command name, e.g. 'CreateWalls'."}},
-            "required": ["command"],
-            "additionalProperties": False,
-        },
-        annotations=types.ToolAnnotations(read_only_hint=True, open_world_hint=False),
-    ),
-    types.Tool(
-        name="tapir_run_command",
-        description=(
-            "Runs any Tapir command. The parameters are validated against the command's input schema "
-            "(see tapir_describe_command). May modify or delete model data depending on the command."
+    tool(
+        "tapir_list_commands",
+        "Lists Tapir commands with a one-line description, optionally filtered by group name or text.",
+        object_schema(
+            group={"type": "string", "description": "Part of a group name, e.g. 'Element', 'Property', 'Navigator'."},
+            search={"type": "string", "description": "Text to look for in the command name or description."},
         ),
-        input_schema={
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "Tapir command name."},
-                "parameters": {"type": "object", "description": "Command parameters.", "default": {}},
-            },
-            "required": ["command"],
-            "additionalProperties": False,
-        },
-        annotations=types.ToolAnnotations(destructive_hint=True, open_world_hint=False),
+        read_only_hint=True,
     ),
-    types.Tool(
-        name="archicad_run_api_command",
-        description=(
-            "Runs an official Archicad JSON API command, e.g. 'API.GetElementsByType' or "
-            "'API.GetBuiltInPropertyIds'. See Graphisoft's JSON API reference for parameters."
+    tool(
+        "tapir_describe_command",
+        "Returns the input and output JSON schemas of a Tapir command. Read this before tapir_run_command.",
+        object_schema(["command"], command={"type": "string", "description": "Tapir command name, e.g. 'CreateWalls'."}),
+        read_only_hint=True,
+    ),
+    tool(
+        "tapir_run_command",
+        "Runs any Tapir command. The parameters are validated against the command's input schema "
+        "(see tapir_describe_command). May modify or delete model data depending on the command.",
+        object_schema(
+            ["command"],
+            command={"type": "string", "description": "Tapir command name."},
+            parameters={"type": "object", "description": "Command parameters.", "default": {}},
         ),
-        input_schema={
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "pattern": "^API\\.", "description": "Command name starting with 'API.'."},
-                "parameters": {"type": "object", "default": {}},
-            },
-            "required": ["command"],
-            "additionalProperties": False,
-        },
-        annotations=types.ToolAnnotations(destructive_hint=True, open_world_hint=False),
+        destructive_hint=True,
+    ),
+    tool(
+        "archicad_run_api_command",
+        "Runs an official Archicad JSON API command, e.g. 'API.GetElementsByType' or "
+        "'API.GetBuiltInPropertyIds'. See Graphisoft's JSON API reference for parameters.",
+        object_schema(
+            ["command"],
+            command={"type": "string", "pattern": "^API\\.", "description": "Command name starting with 'API.'."},
+            parameters={"type": "object", "default": {}},
+        ),
+        destructive_hint=True,
     ),
 ]
 
-INSIGHT_TOOLS = [
-    types.Tool(
-        name=name,
-        description=DESCRIPTIONS[name],
-        input_schema=schema,
-        annotations=types.ToolAnnotations(read_only_hint=True, open_world_hint=False),
-    )
-    for name, schema in SCHEMAS.items()
-]
+INSIGHT_TOOLS = [tool(name, DESCRIPTIONS[name], schema, read_only_hint=True) for name, schema in SCHEMAS.items()]
 
 EDIT_TOOLS = [
-    types.Tool(
-        name=name,
-        description=EDIT_DESCRIPTIONS[name],
-        input_schema=schema,
-        annotations=types.ToolAnnotations(
-            read_only_hint=name in READ_ONLY_EDIT_TOOLS,
-            destructive_hint=None if name in READ_ONLY_EDIT_TOOLS else name == "archicad_undo",
-            open_world_hint=False,
-        ),
+    tool(
+        name,
+        EDIT_DESCRIPTIONS[name],
+        schema,
+        read_only_hint=name in READ_ONLY_EDIT_TOOLS,
+        destructive_hint=None if name in READ_ONLY_EDIT_TOOLS else name == "archicad_undo",
     )
     for name, schema in EDIT_SCHEMAS.items()
 ]
@@ -156,34 +139,21 @@ UPDATE_TAPIR_HINT = (
 
 
 def select_commands(catalog: Catalog, setting: str) -> list[str]:
-    setting = setting.strip()
-    if setting.lower() == "none":
+    setting = setting.strip().lower()
+    if setting == "none":
         return []
-    if setting.lower() == "all":
+    if setting == "all":
         return list(catalog.commands)
-    if setting.lower() in ("", "curated"):
-        return [name for name in CURATED_COMMANDS if name in catalog.commands]
-    names: list[str] = []
-    for item in (part.strip() for part in setting.split(",")):
-        if item.lower() == "curated":
-            names += CURATED_COMMANDS
-        elif item in catalog.commands:
-            names.append(item)
-        else:
-            names += [n for g, members in catalog.groups.items() if item.lower() in g.lower() for n in members]
-    return [n for n in dict.fromkeys(names) if n in catalog.commands]
+    return [name for name in CURATED_COMMANDS if name in catalog.commands]
 
 
 def command_tool(catalog: Catalog, command: Command) -> types.Tool:
-    return types.Tool(
-        name=command.name,
-        description=f"{command.description} (Tapir, {command.group})",
-        input_schema=catalog.input_schema(command.name),
-        annotations=types.ToolAnnotations(
-            read_only_hint=command.read_only,
-            destructive_hint=command.destructive if not command.read_only else None,
-            open_world_hint=False,
-        ),
+    return tool(
+        command.name,
+        f"{command.description} (Tapir, {command.group})",
+        catalog.input_schema(command.name),
+        read_only_hint=command.read_only,
+        destructive_hint=None if command.read_only else True,
     )
 
 

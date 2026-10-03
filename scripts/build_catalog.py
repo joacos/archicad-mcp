@@ -10,7 +10,6 @@ Usage: python scripts/build_catalog.py <path-to-tapir-archicad-automation>
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -31,14 +30,8 @@ def main() -> None:
 
     version_file = (tapir / "archicad-addon" / "Sources" / "AddOnVersion.hpp").read_text()
     tapir_version = re.search(r'ADDON_VERSION\s+"([^"]+)"', version_file).group(1)
-    try:
-        commit = subprocess.check_output(["git", "-C", str(tapir), "rev-parse", "HEAD"], text=True).strip()
-    except Exception:
-        commit = None
-
     catalog = {
         "tapirVersion": tapir_version,
-        "sourceCommit": commit,
         "groups": [
             {
                 "name": group["name"],

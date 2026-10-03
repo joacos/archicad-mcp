@@ -35,6 +35,12 @@ LAYERS: list = []
 LAYER_OF: dict = {}
 MODIFIED_SLABS: list = []
 ZONE_GEOMETRIES: list = []
+CLASSIFIED: dict = {ZONE: "X"}
+CLASSIFICATION_TREE = [
+    {"classificationItem": {"classificationItemId": {"guid": "I-SITE"}, "id": "Site", "children": [
+        {"classificationItem": {"classificationItemId": {"guid": "I-WALL"}, "id": "Wall"}}]}},
+    {"classificationItem": {"classificationItemId": {"guid": "I-X"}, "id": "Other"}},
+]
 INITIAL = copy.deepcopy((ELEMENTS, STORIES))
 CREATED_TYPES = {"CreateWalls": ("Wall", "wallsData"), "CreateSlabs": ("Slab", "slabsData"), "CreateZones": ("Zone", "zonesData"),
                  "CreateMeshes": ("Mesh", "meshesData"), "CreateMorphs": ("Morph", "morphsData")}
@@ -139,6 +145,12 @@ def fake_tapir(name, params):
                 z = {"zMin": MESHES[g]["level"] - MESHES[g]["skirtLevel"], "zMax": MESHES[g]["level"] + top}
             return dict(box, xMin=box["xMin"] + dx, xMax=4 + (g == WALLS[2]) + dx, yMin=box["yMin"] + dy, yMax=box["yMax"] + dy, **z)
         return {"boundingBoxes3D": [{"boundingBox3D": moved(g)} for g in guids]}
+    if name == "SetClassificationsOfElements":
+        for item in params["elementClassifications"]:
+            CLASSIFIED.pop(item["elementId"]["guid"], None)
+            if "classificationItemId" in item["classificationId"]:
+                CLASSIFIED[item["elementId"]["guid"]] = item["classificationId"]["classificationItemId"]["guid"]
+        return {"executionResults": [{"success": True} for _ in params["elementClassifications"]]}
     if name == "GetProjectInfo":
         return {"projectName": "Demo", "isTeamwork": False, "isUntitled": False}
     return {
@@ -169,11 +181,13 @@ def fake_api(command, params):
         return {"executionResults": [{"success": True} for _ in params["elementPropertyValues"]]}
     if command == "API.GetAllClassificationSystems":
         return {"classificationSystems": [{"classificationSystemId": {"guid": "CS"}, "name": "Clasificación"}]}
+    if command == "API.GetAllClassificationsInSystem":
+        return {"classificationItems": CLASSIFICATION_TREE}
     if command == "API.GetClassificationsOfElements":
         return {"elementClassifications": [
             {"classificationIds": [{"classificationId": dict(
                 {"classificationSystemId": {"guid": "CS"}},
-                **({"classificationItemId": {"guid": "X"}} if e["elementId"]["guid"] == ZONE else {}),
+                **({"classificationItemId": {"guid": CLASSIFIED[e["elementId"]["guid"]]}} if e["elementId"]["guid"] in CLASSIFIED else {}),
             )}]}
             for e in params["elements"]
         ]}
@@ -229,6 +243,8 @@ def archicad_port(tmp_path, monkeypatch):
     ROTATIONS.clear()
     OFFSETS.clear()
     ZONE_GEOMETRIES.clear()
+    CLASSIFIED.clear()
+    CLASSIFIED[ZONE] = "X"
     FakeArchicad.received = []
     FakeArchicad.tapir_version = "1.6.1"
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), FakeArchicad)
@@ -625,3 +641,25 @@ async def test_solid_morph_keeps_given_faces(archicad_port, monkeypatch):
             "vertices": v, "triangles": [[0, 1, 2]], "faces": sides, "solid": True, "buildingMaterial": "Gravel"}))
     body = MORPHS[done["elements"][0]["elementId"]["guid"]]["body"]
     assert body["bodyType"] == "Solid" and [f["vertexIds"] for f in body["polygons"]][1:] == sides
+
+
+@pytest.mark.anyio
+async def test_classify_elements_by_rule_and_undo(archicad_port, monkeypatch):
+    async with Client(make_server(archicad_port, monkeypatch)) as client:
+        items = call_json(await client.call_tool("archicad_classification_items", {"search": "wall"}))
+        assert items["items"] == ["Site/Wall"]
+        rules = [{"item": "Site/Wall", "elementType": "Wall"}]
+        preview = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules, "dryRun": True}))
+        assert preview["matched"] == 3 and preview["byItem"] == {"Site/Wall": 3} and not CLASSIFIED.get(WALLS[0])
+        done = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules}))
+        assert done["matched"] == 3 and {CLASSIFIED[w] for w in WALLS} == {"I-WALL"}
+        again = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules}))
+        assert again["matched"] == 0
+        # The zone is already classified: untouched unless overwrite is set.
+        zone_rule = [{"item": "Wall", "elementType": "Zone"}]
+        assert call_json(await client.call_tool("archicad_classify_elements", {"rules": zone_rule}))["matched"] == 0
+        assert call_json(await client.call_tool("archicad_classify_elements", {"rules": zone_rule, "overwrite": True}))["matched"] == 1
+        await client.call_tool("archicad_undo", {"steps": 2})
+        assert CLASSIFIED == {ZONE: "X"}
+        bad = await client.call_tool("archicad_classify_elements", {"rules": [{"item": "Nope"}]})
+        assert bad.is_error

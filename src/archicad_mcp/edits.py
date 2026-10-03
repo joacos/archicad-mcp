@@ -73,6 +73,47 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
+    "archicad_classification_items": {
+        "type": "object",
+        "properties": {
+            "system": {"type": "string", "description": "Part of the classification system name; the first one by default."},
+            "search": {"type": "string", "description": "Text to look for in the item ID or its path."},
+        },
+        "additionalProperties": False,
+    },
+    "archicad_classify_elements": {
+        "type": "object",
+        "properties": {
+            **SCOPE_PROPERTIES,
+            "system": {"type": "string", "description": "Part of the classification system name; the first one by default."},
+            "rules": {
+                "type": "array",
+                "minItems": 1,
+                "description": "First matching rule wins for each element. A rule without elementType and layer matches everything.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "item": {
+                            "type": "string",
+                            "description": "Classification item ID (e.g. 'Terrain') or full path (e.g. 'Site/Massing/Morph'); see archicad_classification_items.",
+                        },
+                        "elementType": {"type": "string", "description": "Match elements of this type, e.g. 'Slab'."},
+                        "layer": {"type": "string", "description": "Match elements on the layer with exactly this name."},
+                    },
+                    "required": ["item"],
+                    "additionalProperties": False,
+                },
+            },
+            "overwrite": {
+                "type": "boolean",
+                "default": False,
+                "description": "Also reclassify elements that already have a classification in this system.",
+            },
+            "dryRun": DRY_RUN,
+        },
+        "required": ["rules"],
+        "additionalProperties": False,
+    },
     "archicad_create_room": {
         "type": "object",
         "properties": {
@@ -266,6 +307,13 @@ EDIT_DESCRIPTIONS = {
         "Changes element IDs: explicit values, unique suffixes for repeated IDs (fixDuplicates) or a "
         "prefix + number sequence (numbering). Revert with archicad_undo."
     ),
+    "archicad_classification_items": (
+        "Lists the items of a classification system with their path, to use in archicad_classify_elements."
+    ),
+    "archicad_classify_elements": (
+        "Classifies many elements at once with rules by element type and/or layer (e.g. every Slab on layer "
+        "'02 PLAZA - Pasto' as 'Terrain'), by default only those still unclassified. Revert with archicad_undo."
+    ),
     "archicad_create_room": (
         "Creates a room from an outline: walls along its edges, a floor slab and a zone, on one story. "
         "Revert with archicad_undo."
@@ -297,14 +345,14 @@ EDIT_DESCRIPTIONS = {
         "material, so it reads differently from the mesh below. Revert with archicad_undo."
     ),
     "archicad_undo": (
-        "Reverts the last actions made with archicad_set_element_ids, archicad_create_slabs, "
+        "Reverts the last actions made with archicad_set_element_ids, archicad_classify_elements, archicad_create_slabs, "
         "archicad_create_meshes, archicad_move_elements, archicad_rotate_elements, archicad_set_slab_levels, "
         "archicad_set_mesh, archicad_create_surface_morph or "
         "archicad_create_room in the open project: deletes what they created and restores what they changed."
     ),
     "archicad_history": "Lists the actions archicad_undo can revert in the open project, newest first.",
 }
-READ_ONLY_EDIT_TOOLS = {"archicad_history"}
+READ_ONLY_EDIT_TOOLS = {"archicad_history", "archicad_classification_items"}
 
 
 def journal_path() -> Path:
@@ -375,24 +423,21 @@ class Edits:
         self.insights = insights
 
     async def run(self, name: str, args: dict[str, Any]) -> Any:
-        if name == "archicad_set_element_ids":
-            return await self.set_element_ids(args)
-        if name == "archicad_create_room":
-            return await self.create_room(args)
-        if name == "archicad_create_slabs":
-            return await self.create_slabs(args)
-        if name == "archicad_move_elements":
-            return await self.move_elements(args)
-        if name == "archicad_rotate_elements":
-            return await self.rotate_elements(args)
-        if name == "archicad_set_slab_levels":
-            return await self.set_slab_levels(args)
-        if name == "archicad_set_mesh":
-            return await self.set_mesh(args)
-        if name == "archicad_create_meshes":
-            return await self.create_meshes(args)
-        if name == "archicad_create_surface_morph":
-            return await self.create_surface_morph(args)
+        handlers = {
+            "archicad_set_element_ids": self.set_element_ids,
+            "archicad_classification_items": self.classification_items,
+            "archicad_classify_elements": self.classify_elements,
+            "archicad_create_room": self.create_room,
+            "archicad_create_slabs": self.create_slabs,
+            "archicad_move_elements": self.move_elements,
+            "archicad_rotate_elements": self.rotate_elements,
+            "archicad_set_slab_levels": self.set_slab_levels,
+            "archicad_set_mesh": self.set_mesh,
+            "archicad_create_meshes": self.create_meshes,
+            "archicad_create_surface_morph": self.create_surface_morph,
+        }
+        if name in handlers:
+            return await handlers[name](args)
         if name == "archicad_undo":
             return await self.undo(args.get("steps", 1))
         if name == "archicad_history":
@@ -472,8 +517,8 @@ class Edits:
 
     async def apply_undo(self, op: dict[str, Any]) -> tuple[list[str], list[str]]:
         """Reverts one operation; returns (problems, guids that no longer exist)."""
-        if op["op"] in ("delete", "move", "rotate", "setIds", "slabLevels"):
-            if op["op"] in ("setIds", "slabLevels"):
+        if op["op"] in ("delete", "move", "rotate", "setIds", "slabLevels", "classify"):
+            if op["op"] in ("setIds", "slabLevels", "classify"):
                 guids = [v["guid"] for v in op["values"]]
             else:
                 guids = [e["elementId"]["guid"] for e in op["elements"]]
@@ -495,6 +540,8 @@ class Edits:
                 problems = await self.rotate(elements, op["origin"], op["degrees"])
             elif op["op"] == "slabLevels":
                 problems = await self.write_slab_levels([v for v in op["values"] if v["guid"] in alive])
+            elif op["op"] == "classify":
+                problems = await self.write_classifications(op["system"], [v for v in op["values"] if v["guid"] in alive])
             else:
                 problems = await self.write_ids([v for v in op["values"] if v["guid"] in alive])
             return problems, gone
@@ -586,6 +633,124 @@ class Edits:
             [{"op": "setIds", "values": [{"guid": c["guid"], "id": c["from"]} for c in changes]}],
         )
         return {"changes": changes, "problems": problems or None, "undoId": entry}
+
+    # -- classifications ---------------------------------------------------
+
+    async def classification_system(self, name: str | None) -> str:
+        systems = (await self.client.run_command("API.GetAllClassificationSystems")).get("classificationSystems", [])
+        found = [s for s in systems if not name or name.lower() in s.get("name", "").lower()]
+        if not found:
+            raise ArchicadError(f"No classification system matches {name!r}; existing: {[s.get('name') for s in systems]}.")
+        return found[0]["classificationSystemId"]["guid"]
+
+    async def classification_entries(self, system: str) -> list[dict[str, str]]:
+        """Every item of the system as {path, id, guid}."""
+        tree = await self.client.run_command(
+            "API.GetAllClassificationsInSystem", {"classificationSystemId": {"guid": system}}
+        )
+        entries: list[dict[str, str]] = []
+
+        def walk(nodes: list[dict[str, Any]], parent: str) -> None:
+            for node in nodes:
+                item = node["classificationItem"]
+                path = f"{parent}/{item['id']}" if parent else item["id"]
+                entries.append({"path": path, "id": item["id"], "guid": item["classificationItemId"]["guid"]})
+                walk(item.get("children", []), path)
+
+        walk(tree.get("classificationItems", []), "")
+        return entries
+
+    async def classification_items(self, args: dict[str, Any]) -> dict[str, Any]:
+        system = await self.classification_system(args.get("system"))
+        text = (args.get("search") or "").lower()
+        return {"items": [e["path"] for e in await self.classification_entries(system) if text in e["path"].lower()]}
+
+    async def write_classifications(self, system: str, values: list[dict[str, Any]]) -> list[str]:
+        """Sets each element's item (guid), or unclassifies it when the item is None."""
+        problems: list[str] = []
+        for part in chunks(values):
+            result = await self.client.run_tapir_command(
+                "SetClassificationsOfElements",
+                {
+                    "elementClassifications": [
+                        {
+                            "elementId": {"guid": v["guid"]},
+                            "classificationId": {
+                                "classificationSystemId": {"guid": system},
+                                **({"classificationItemId": {"guid": v["item"]}} if v["item"] else {}),
+                            },
+                        }
+                        for v in part
+                    ]
+                },
+            )
+            problems += [
+                f"{v['guid']}: {r.get('error', {}).get('message', 'failed')}"
+                for v, r in zip(part, (result or {}).get("executionResults", []))
+                if not r.get("success")
+            ]
+        return problems
+
+    async def classify_elements(self, args: dict[str, Any]) -> dict[str, Any]:
+        system = await self.classification_system(args.get("system"))
+        entries = await self.classification_entries(system)
+        names: dict[str, str] = {}
+        rules = []
+        for rule in args["rules"]:
+            wanted = rule["item"].lower()
+            found = [e for e in entries if e["path"].lower() == wanted] or [e for e in entries if e["id"].lower() == wanted]
+            if len(found) != 1:
+                raise ArchicadError(
+                    f"Item {rule['item']!r} "
+                    + (f"is ambiguous: {[e['path'] for e in found]}." if found else "was not found; use archicad_classification_items.")
+                )
+            names[found[0]["guid"]] = found[0]["path"]
+            rules.append({**rule, "guid": found[0]["guid"]})
+
+        rows = [r for r in await self.insights.rows(await self.insights.resolve_scope(args)) if "error" not in r]
+        current: dict[str, str | None] = {}
+        for part in chunks(rows):
+            result = await self.client.run_command(
+                "API.GetClassificationsOfElements",
+                {
+                    "elements": [element(r["guid"]) for r in part],
+                    "classificationSystemIds": [{"classificationSystemId": {"guid": system}}],
+                },
+            )
+            for r, item in zip(part, result.get("elementClassifications", [])):
+                ids = item.get("classificationIds", [])
+                current[r["guid"]] = next(
+                    (c["classificationId"]["classificationItemId"]["guid"] for c in ids if "classificationItemId" in c.get("classificationId", {})),
+                    None,
+                )
+
+        changes = []
+        for row in rows:
+            rule = next(
+                (
+                    r
+                    for r in rules
+                    if (not r.get("elementType") or r["elementType"].lower() == str(row["type"]).lower())
+                    and (not r.get("layer") or r["layer"].lower() == str(row["layer"]).lower())
+                ),
+                None,
+            )
+            before = current.get(row["guid"])
+            if rule and before != rule["guid"] and (before is None or args.get("overwrite")):
+                changes.append({"guid": row["guid"], "type": row["type"], "layer": row["layer"], "item": rule["guid"], "before": before})
+        by_item: dict[str, int] = {}
+        for c in changes:
+            by_item[names[c["item"]]] = by_item.get(names[c["item"]], 0) + 1
+        summary = {"matched": len(changes), "byItem": by_item, "checkedElements": len(rows)}
+        if args.get("dryRun") or not changes:
+            return {"dryRun": bool(args.get("dryRun")), **summary, "sample": [{k: c[k] for k in ("guid", "type", "layer")} for c in changes[:10]]}
+        problems = await self.write_classifications(system, changes)
+        entry = await self.record(
+            "archicad_classify_elements",
+            f"Classified {len(changes)} elements ({', '.join(f'{n} x {k}' for k, n in by_item.items())})",
+            [{"op": "classify", "system": system, "values": [{"guid": c["guid"], "item": c["before"]} for c in changes]}],
+        )
+        return {**summary, "problems": problems or None, "undoId": entry}
 
     # -- rooms -------------------------------------------------------------
 
@@ -886,14 +1051,18 @@ class Edits:
                     problems.append(f"{e['elementId']['guid']}: did not rotate")
         return problems
 
-    async def rotate_elements(self, args: dict[str, Any]) -> dict[str, Any]:
-        scoped = any(args.get(k) for k in ("elements", "selectedOnly", "elementType"))
-        if not scoped:
-            raise ArchicadError("Say what to rotate: elements, selectedOnly or elementType.")
+    async def scoped(self, args: dict[str, Any], verb: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Resolves the elements to move or rotate, with their display rows."""
+        if not any(args.get(k) for k in ("elements", "selectedOnly", "elementType")):
+            raise ArchicadError(f"Say what to {verb}: elements, selectedOnly or elementType.")
         elements = [element(e["elementId"]["guid"]) for e in await self.insights.resolve_scope(args)]
+        rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in await self.insights.rows(elements)]
+        return elements, rows
+
+    async def rotate_elements(self, args: dict[str, Any]) -> dict[str, Any]:
+        elements, rows = await self.scoped(args, "rotate")
         origin = {"x": args["origin"]["x"], "y": args["origin"]["y"]}
         degrees = args["degrees"]
-        rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in await self.insights.rows(elements)]
         if args.get("dryRun") or not elements:
             return {"dryRun": bool(args.get("dryRun")), "origin": origin, "degrees": degrees, "elements": rows}
         problems = await self.rotate(elements, origin, degrees)
@@ -905,12 +1074,8 @@ class Edits:
         return {"rotated": len(elements), "origin": origin, "degrees": degrees, "elements": rows, "problems": problems or None, "undoId": entry}
 
     async def move_elements(self, args: dict[str, Any]) -> dict[str, Any]:
-        scoped = any(args.get(k) for k in ("elements", "selectedOnly", "elementType"))
-        if not scoped:
-            raise ArchicadError("Say what to move: elements, selectedOnly or elementType.")
-        elements = [element(e["elementId"]["guid"]) for e in await self.insights.resolve_scope(args)]
+        elements, rows = await self.scoped(args, "move")
         vector = {"x": args["vector"]["x"], "y": args["vector"]["y"], "z": args["vector"].get("z", 0)}
-        rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in await self.insights.rows(elements)]
         if args.get("dryRun") or not elements:
             return {"dryRun": bool(args.get("dryRun")), "vector": vector, "elements": rows}
         problems = await self.move(elements, vector)
