@@ -123,7 +123,7 @@ class Catalog:
         pending = _refs(schema)
         while pending:
             name = pending.pop()
-            if name not in needed:
+            if name and name not in needed and name in self.definitions:
                 needed.add(name)
                 pending |= _refs(self.definitions.get(name, {}))
         result = _rewrite_refs(schema)
