@@ -360,6 +360,9 @@ EDIT_DESCRIPTIONS = {
         "archicad_set_mesh, archicad_create_surface_morph or "
         "archicad_create_room in the open project: deletes what they created and restores what they changed."
     ),
+    "archicad_apply_dimension_favorite": (
+        "Applies a favorite to all dimension elements in the project."
+    ),
     "archicad_history": "Lists the actions archicad_undo can revert in the open project, newest first.",
 }
 READ_ONLY_EDIT_TOOLS = {"archicad_history", "archicad_classification_items"}
