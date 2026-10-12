@@ -292,6 +292,16 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["vertices"],
         "additionalProperties": False,
     },
+
+    "archicad_apply_dimension_favorite": {
+        "type": "object",
+        "properties": {
+            "favoriteName": {"type": "string", "description": "Name of the favorite to apply to all dimensions."}
+        },
+        "required": ["favoriteName"],
+        "additionalProperties": False,
+    },
+
     "archicad_undo": {
         "type": "object",
         "properties": {
@@ -435,6 +445,9 @@ class Edits:
             "archicad_set_mesh": self.set_mesh,
             "archicad_create_meshes": self.create_meshes,
             "archicad_create_surface_morph": self.create_surface_morph,
+
+            "archicad_apply_dimension_favorite": self.apply_dimension_favorite,
+
         }
         if name in handlers:
             return await handlers[name](args)
@@ -1334,3 +1347,34 @@ class Edits:
             "problems": problems or None,
             "undoId": entry,
         }
+
+
+    async def apply_dimension_favorite(self, args: dict[str, Any]) -> Any:
+        favorite = args["favoriteName"]
+        elements = []
+        for type_name in ["Dimension", "LevelDimension", "RadialDimension", "AngleDimension"]:
+            try:
+                res = await self.client.run_tapir_command("GetElementsByType", {"elementType": type_name})
+                elements.extend(res.get("elements", []))
+            except ArchicadError:
+                pass
+        
+        if not elements:
+            return {"message": "No dimensions found in the project."}
+        
+        favorites_to_apply = [
+            {"elementId": e["elementId"], "favorite": favorite}
+            for e in elements
+        ]
+        
+        try:
+            res = await self.client.run_tapir_command("ApplyFavoritesToElements", {
+                "favoritesToApply": favorites_to_apply
+            })
+            successes = [r for r in res.get("executionResults", []) if r.get("success")]
+            failures = [r for r in res.get("executionResults", []) if not r.get("success")]
+            return {
+                "message": f"Applied '{favorite}' to {len(successes)} dimensions. {len(failures)} failures."
+            }
+        except ArchicadError as e:
+            return {"error": str(e)}
