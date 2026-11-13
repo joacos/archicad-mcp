@@ -1,10 +1,10 @@
 # archicad-tapir-mcp
 
-Servidor MCP que permite a Claude (u otro cliente MCP) trabajar con un Archicad abierto, usando la API JSON oficial de Graphisoft y los ~250 comandos del add-on [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation).
+Servidor MCP que permite a Claude (u otro cliente MCP) trabajar con un Archicad abierto, usando la API JSON oficial de Graphisoft y los ~780 comandos del add-on [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation).
 
 ## Requisitos
 
-1. **Archicad 25 a 29** (Windows o macOS) con un proyecto abierto.
+1. **Archicad 25 a 30** (Windows o macOS) con un proyecto abierto.
 2. **Add-on Tapir** instalado: descargá el [instalador para Windows](https://github.com/ENZYME-APD/tapir-archicad-automation/releases/latest/download/TapirInstaller_Win.exe) o [para macOS](https://github.com/ENZYME-APD/tapir-archicad-automation/releases/latest/download/TapirInstaller_Mac.zip) y reiniciá Archicad.
 3. **Python 3.10 o superior**.
 
@@ -95,7 +95,7 @@ Ejemplo en Claude Desktop:
 
 ## Actualizar el catálogo de Tapir
 
-Los schemas vienen de la documentación de Tapir (versión 1.6.1). Cuando salga una versión nueva:
+Los schemas vienen de la documentación de Tapir (versión 2.0.0). Cuando salga una versión nueva:
 
 ```bash
 git clone --depth 1 https://github.com/ENZYME-APD/tapir-archicad-automation

@@ -354,6 +354,9 @@ EDIT_DESCRIPTIONS = {
         "Creates a Morph surface from triangles (e.g. a path draped on terrain) with its own building "
         "material, so it reads differently from the mesh below. Revert with archicad_undo."
     ),
+    "archicad_apply_dimension_favorite": (
+        "Applies a named favorite to all dimensions in the project (linear, level, radial, angle)."
+    ),
     "archicad_undo": (
         "Reverts the last actions made with archicad_set_element_ids, archicad_classify_elements, archicad_create_slabs, "
         "archicad_create_meshes, archicad_move_elements, archicad_rotate_elements, archicad_set_slab_levels, "
