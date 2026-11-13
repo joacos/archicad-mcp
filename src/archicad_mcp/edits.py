@@ -355,12 +355,14 @@ EDIT_DESCRIPTIONS = {
         "material, so it reads differently from the mesh below. Revert with archicad_undo."
     ),
     "archicad_apply_dimension_favorite": (
-        "Applies a named favorite to all dimensions in the project (linear, level, radial, angle)."
+        "Applies a named favorite to all dimensions in the project (linear, level, radial, angle). "
+        "Each dimension's previous settings are kept as a temporary '~mcp-undo' favorite until undone. "
+        "Revert with archicad_undo."
     ),
     "archicad_undo": (
         "Reverts the last actions made with archicad_set_element_ids, archicad_classify_elements, archicad_create_slabs, "
         "archicad_create_meshes, archicad_move_elements, archicad_rotate_elements, archicad_set_slab_levels, "
-        "archicad_set_mesh, archicad_create_surface_morph or "
+        "archicad_set_mesh, archicad_create_surface_morph, archicad_apply_dimension_favorite or "
         "archicad_create_room in the open project: deletes what they created and restores what they changed."
     ),
     "archicad_history": "Lists the actions archicad_undo can revert in the open project, newest first.",
@@ -577,6 +579,16 @@ class Edits:
                 [element(op["guid"])], "ModifyMeshes", {"meshesData": [{"elementId": {"guid": op["guid"]}, "meshData": data}]}
             )
             return problems, []
+        if op["op"] == "favorites":
+            # Reapply each element's snapshot favorite, then drop the snapshots.
+            guids = [v["guid"] for v in op["values"]]
+            alive = await self.existing(guids)
+            problems = []
+            back = [v for v in op["values"] if v["guid"] in alive]
+            if back:
+                problems = await self.apply_favorites(back)
+            await self.client.run_tapir_command("DeleteFavorites", {"favorites": [v["favorite"] for v in op["values"]]})
+            return problems, [g for g in guids if g not in alive]
         if op["op"] == "setStories":
             # SetStories rebuilds the story structure and can delete elements
             # (seen on a real project), so story changes are never replayed.
@@ -1352,32 +1364,55 @@ class Edits:
         }
 
 
-    async def apply_dimension_favorite(self, args: dict[str, Any]) -> Any:
-        favorite = args["favoriteName"]
-        elements = []
-        for type_name in ["Dimension", "LevelDimension", "RadialDimension", "AngleDimension"]:
-            try:
-                res = await self.client.run_tapir_command("GetElementsByType", {"elementType": type_name})
-                elements.extend(res.get("elements", []))
-            except ArchicadError:
-                pass
-        
-        if not elements:
-            return {"message": "No dimensions found in the project."}
-        
-        favorites_to_apply = [
-            {"elementId": e["elementId"], "favorite": favorite}
-            for e in elements
+    # -- favorites ---------------------------------------------------------
+
+    async def apply_favorites(self, values: list[dict[str, str]]) -> list[str]:
+        """Applies values[i]["favorite"] to values[i]["guid"]; returns '<guid>: <error>' for each failure."""
+        result = await self.client.run_tapir_command(
+            "ApplyFavoritesToElements", {"favoritesToApply": [{**element(v["guid"]), "favorite": v["favorite"]} for v in values]}
+        )
+        return [
+            f"{v['guid']}: {r.get('error', {}).get('message', 'failed')}"
+            for v, r in zip(values, (result or {}).get("executionResults", []))
+            if not r.get("success")
         ]
-        
-        try:
-            res = await self.client.run_tapir_command("ApplyFavoritesToElements", {
-                "favoritesToApply": favorites_to_apply
-            })
-            successes = [r for r in res.get("executionResults", []) if r.get("success")]
-            failures = [r for r in res.get("executionResults", []) if not r.get("success")]
-            return {
-                "message": f"Applied '{favorite}' to {len(successes)} dimensions. {len(failures)} failures."
-            }
-        except ArchicadError as e:
-            return {"error": str(e)}
+
+    async def apply_dimension_favorite(self, args: dict[str, Any]) -> dict[str, Any]:
+        favorite = args["favoriteName"]
+        guids: list[str] = []
+        for type_name in ("Dimension", "LevelDimension", "RadialDimension", "AngleDimension"):
+            res = await self.client.run_tapir_command("GetElementsByType", {"elementType": type_name})
+            guids += [e["elementId"]["guid"] for e in (res or {}).get("elements", [])]
+        if not guids:
+            return {"applied": 0, "note": "No dimensions found in the project."}
+
+        # Archicad cannot read back every setting a favorite changes, so each dimension's current
+        # settings are saved as a temporary favorite that archicad_undo reapplies and then deletes.
+        # ponytail: one favorite per dimension; dedupe identical settings if the palette gets too big.
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        snapshots = [{"guid": g, "favorite": f"~mcp-undo {stamp} {g}"} for g in guids]
+        res = await self.client.run_tapir_command(
+            "CreateFavoritesFromElements",
+            {"favoritesFromElements": [{**element(v["guid"]), "favorite": v["favorite"]} for v in snapshots]},
+        )
+        results = (res or {}).get("executionResults", [])
+        saved = [v for v, r in zip(snapshots, results) if r.get("success")]
+        problems = [f"{v['guid']}: settings could not be saved for undo, left unchanged" for v, r in zip(snapshots, results) if not r.get("success")]
+        if not saved:
+            return {"applied": 0, "problems": problems}
+
+        failed = await self.apply_favorites([{"guid": v["guid"], "favorite": favorite} for v in saved])
+        failed_guids = {f.split(":", 1)[0] for f in failed}
+        applied = [v for v in saved if v["guid"] not in failed_guids]
+        unused = [v["favorite"] for v in saved if v["guid"] in failed_guids]
+        if unused:
+            await self.client.run_tapir_command("DeleteFavorites", {"favorites": unused})
+        problems += failed
+        entry = None
+        if applied:
+            entry = await self.record(
+                "archicad_apply_dimension_favorite",
+                f"Applied favorite '{favorite}' to {len(applied)} dimensions",
+                [{"op": "favorites", "values": applied}],
+            )
+        return {"applied": len(applied), "favorite": favorite, "problems": problems or None, "undoId": entry}

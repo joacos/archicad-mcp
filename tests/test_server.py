@@ -36,6 +36,9 @@ LAYER_OF: dict = {}
 MODIFIED_SLABS: list = []
 ZONE_GEOMETRIES: list = []
 CLASSIFIED: dict = {ZONE: "X"}
+DIM = "00000000-0000-0000-0000-0000000000D1"
+STYLE: dict = {}  # element guid -> favorite applied to it
+FAVORITES: dict = {}  # favorite name -> style saved in it
 CLASSIFICATION_TREE = [
     {"classificationItem": {"classificationItemId": {"guid": "I-SITE"}, "id": "Site", "children": [
         {"classificationItem": {"classificationItemId": {"guid": "I-WALL"}, "id": "Wall"}}]}},
@@ -151,6 +154,18 @@ def fake_tapir(name, params):
             if "classificationItemId" in item["classificationId"]:
                 CLASSIFIED[item["elementId"]["guid"]] = item["classificationId"]["classificationItemId"]["guid"]
         return {"executionResults": [{"success": True} for _ in params["elementClassifications"]]}
+    if name == "CreateFavoritesFromElements":
+        for item in params["favoritesFromElements"]:
+            FAVORITES[item["favorite"]] = STYLE.get(item["elementId"]["guid"], "original")
+        return {"executionResults": [{"success": True} for _ in params["favoritesFromElements"]]}
+    if name == "ApplyFavoritesToElements":
+        for item in params["favoritesToApply"]:
+            STYLE[item["elementId"]["guid"]] = FAVORITES.get(item["favorite"], item["favorite"])
+        return {"executionResults": [{"success": True} for _ in params["favoritesToApply"]]}
+    if name == "DeleteFavorites":
+        for fav in params["favorites"]:
+            FAVORITES.pop(fav, None)
+        return {"executionResults": [{"success": True} for _ in params["favorites"]]}
     if name == "GetProjectInfo":
         return {"projectName": "Demo", "isTeamwork": False, "isUntitled": False}
     return {
@@ -245,6 +260,8 @@ def archicad_port(tmp_path, monkeypatch):
     ZONE_GEOMETRIES.clear()
     CLASSIFIED.clear()
     CLASSIFIED[ZONE] = "X"
+    STYLE.clear()
+    FAVORITES.clear()
     FakeArchicad.received = []
     FakeArchicad.tapir_version = "1.6.1"
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), FakeArchicad)
@@ -663,3 +680,14 @@ async def test_classify_elements_by_rule_and_undo(archicad_port, monkeypatch):
         assert CLASSIFIED == {ZONE: "X"}
         bad = await client.call_tool("archicad_classify_elements", {"rules": [{"item": "Nope"}]})
         assert bad.is_error
+
+
+@pytest.mark.anyio
+async def test_apply_dimension_favorite_and_undo(archicad_port, monkeypatch):
+    ELEMENTS[DIM] = ("Dimension", "", 0)
+    async with Client(make_server(archicad_port, monkeypatch)) as client:
+        done = call_json(await client.call_tool("archicad_apply_dimension_favorite", {"favoriteName": "Cotas 1:50"}))
+        assert done["applied"] == 1 and done["problems"] is None and STYLE[DIM] == "Cotas 1:50"
+        undone = call_json(await client.call_tool("archicad_undo", {}))
+    assert undone["reverted"][0]["problems"] is None
+    assert STYLE[DIM] == "original" and FAVORITES == {}  # settings restored, snapshot favorite removed
