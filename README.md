@@ -25,7 +25,7 @@ En Claude Code, sin instalar nada a mano (requiere [uv](https://docs.astral.sh/u
 /plugin install archicad-tapir@archicad-mcp
 ```
 
-El plugin arranca el servidor con `uvx` desde este repositorio. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
+El plugin arranca el servidor con `uvx` desde este repositorio e incluye el skill [`archicad`](skills/archicad/SKILL.md), que le indica al agente qué herramienta usar en cada caso y cómo cambiar el modelo sin riesgos (dry run, undo, nada de `SetStories`). En otros agentes podés copiar ese archivo a su carpeta de skills. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
 
 ## Configuración en Claude Desktop
 
