@@ -25,7 +25,40 @@ En Claude Code, sin instalar nada a mano (requiere [uv](https://docs.astral.sh/u
 /plugin install archicad-tapir@archicad-mcp
 ```
 
-El plugin arranca el servidor con `uvx` desde este repositorio. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
+El plugin arranca el servidor con `uvx` desde este repositorio e instala el skill `archicad` ([skills/archicad/SKILL.md](skills/archicad/SKILL.md)), que le enseña a Claude qué tools usar, cuáles se pueden revertir y qué evitar. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
+
+### Skill en claude.ai / Claude Desktop
+
+Comprimí la carpeta del skill y subila en Configuración > Capacidades > Skills:
+
+```bash
+cd skills && zip -r archicad-skill.zip archicad
+```
+
+El skill necesita el servidor MCP configurado (ver abajo).
+
+## Instalación en Antigravity
+
+1. Servidor MCP: en Antigravity, menú `...` del panel del agente > MCP Servers > Manage MCP Servers > View raw config, y agregá a `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "archicad": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-tapir-mcp"]
+    }
+  }
+}
+```
+
+2. Skill, para todos los proyectos:
+
+```bash
+mkdir -p ~/.gemini/antigravity/skills && cp -R skills/archicad ~/.gemini/antigravity/skills/
+```
+
+O solo para un proyecto, copiándolo en `<proyecto>/.agent/skills/archicad`.
 
 ## Configuración en Claude Desktop
 
