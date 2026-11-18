@@ -29,11 +29,13 @@ El plugin arranca el servidor con `uvx` desde este repositorio e instala el skil
 
 ### Skill en claude.ai / Claude Desktop
 
-Comprimí la carpeta del skill y subila en Configuración > Capacidades > Skills:
+Armá un zip con `SKILL.md` en el nivel superior (sin carpetas adentro) y subilo en Configuración > Capacidades > Skills:
 
 ```bash
-cd skills && zip -r archicad-skill.zip archicad
+cd skills/archicad && zip ../../archicad-skill.zip SKILL.md
 ```
+
+En el repo el skill queda en `skills/archicad/SKILL.md` porque el plugin de Claude Code lo busca ahí; no lo muevas.
 
 El skill necesita el servidor MCP configurado (ver abajo).
 
