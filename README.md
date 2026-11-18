@@ -1,4 +1,4 @@
-# archicad-tapir-mcp
+# Archicad MCP
 
 Servidor MCP que permite a Claude (u otro cliente MCP) trabajar con un Archicad abierto, usando la API JSON oficial de Graphisoft y los ~780 comandos del add-on [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation).
 
@@ -22,8 +22,10 @@ En Claude Code, sin instalar nada a mano (requiere [uv](https://docs.astral.sh/u
 
 ```
 /plugin marketplace add joacos/archicad-mcp
-/plugin install archicad-tapir@archicad-mcp
+/plugin install archicad@archicad-mcp
 ```
+
+Si tenías instalada la versión anterior con el nombre `archicad-tapir`, desinstalala primero: `/plugin uninstall archicad-tapir@archicad-mcp`. Desde la 0.3.0 las tools no llevan el prefijo `archicad_` (`status`, `model_summary`, `undo`…).
 
 El plugin arranca el servidor con `uvx` desde este repositorio e instala el skill `archicad` ([skills/archicad/SKILL.md](skills/archicad/SKILL.md)), que le enseña a Claude qué tools usar, cuáles se pueden revertir y qué evitar. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
 
@@ -48,7 +50,7 @@ El skill necesita el servidor MCP configurado (ver abajo).
   "mcpServers": {
     "archicad": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-tapir-mcp"]
+      "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-mcp"]
     }
   }
 }
@@ -81,31 +83,33 @@ En macOS el comando suele ser `python3`, o la ruta del entorno virtual donde lo 
 
 En Claude Code: `claude mcp add archicad -- python -m archicad_mcp`.
 
-Reiniciá Claude y pedile, por ejemplo: "¿Qué elementos tengo seleccionados en Archicad?" o "Creá cuatro muros de 3 m de alto formando un rectángulo de 5 × 4 m". Si algo no anda, pedile que ejecute `archicad_status`.
+Reiniciá Claude y pedile, por ejemplo: "¿Qué elementos tengo seleccionados en Archicad?" o "Creá cuatro muros de 3 m de alto formando un rectángulo de 5 × 4 m". Si algo no anda, pedile que ejecute `status`.
 
 ## Herramientas que expone
 
 | Tool | Qué hace |
 | --- | --- |
-| `archicad_status` | Busca los Archicad abiertos (puertos 19723-19744), verifica que Tapir responda y avisa qué comandos necesitan una versión más nueva del add-on. |
-| `archicad_model_summary` | Resumen del proyecto en una llamada: pisos, cantidad de elementos por tipo, piso y capa, superficie de zonas y selección actual. |
-| `archicad_list_elements` | Lista compacta de elementos (guid, tipo, ID, piso, capa), mucho más liviana que `GetDetailsOfElements`. |
-| `archicad_quantities` | Cómputo métrico con las propiedades de Archicad: largos, superficies, volúmenes y cantidades, por tipo y opcionalmente por piso o capa, en JSON o CSV. |
-| `archicad_check_model` | Chequeos de calidad: IDs vacíos o repetidos, elementos sin clasificar, elementos probablemente duplicados, capas ocultas o bloqueadas, zonas sin superficie, pisos sin nombre o vacíos. |
-| `archicad_set_element_ids` | Cambia IDs de elementos: valores explícitos, sufijos únicos para IDs repetidos (`fixDuplicates`) o numeración con prefijo (`numbering`, por ejemplo FU-001). |
-| `archicad_create_room` | Crea una habitación desde un contorno: muros sobre cada lado, losa de piso y zona. La losa se crea básica con el espesor pedido (`slabStructure: "default"` conserva la estructura de la herramienta Losa). La zona se ubica automáticamente; como Archicad solo lo logra en el piso abierto en pantalla, en otros pisos se dibuja por el contorno interior de los muros. |
-| `archicad_undo` / `archicad_history` | Revierte las últimas acciones de las tres tools anteriores (borra lo creado y restaura lo cambiado) y lista lo que se puede revertir. |
+| `status` | Busca los Archicad abiertos (puertos 19723-19744), verifica que Tapir responda y avisa qué comandos necesitan una versión más nueva del add-on. |
+| `model_summary` | Resumen del proyecto en una llamada: pisos, cantidad de elementos por tipo, piso y capa, superficie de zonas y selección actual. |
+| `list_elements` | Lista compacta de elementos (guid, tipo, ID, piso, capa), mucho más liviana que `GetDetailsOfElements`. |
+| `quantities` | Cómputo métrico con las propiedades de Archicad: largos, superficies, volúmenes y cantidades, por tipo y opcionalmente por piso o capa, en JSON o CSV. |
+| `check_model` | Chequeos de calidad: IDs vacíos o repetidos, elementos sin clasificar, elementos probablemente duplicados, capas ocultas o bloqueadas, zonas sin superficie, pisos sin nombre o vacíos. |
+| `set_element_ids` | Cambia IDs de elementos: valores explícitos, sufijos únicos para IDs repetidos (`fixDuplicates`) o numeración con prefijo (`numbering`, por ejemplo FU-001). |
+| `create_room` | Crea una habitación desde un contorno: muros sobre cada lado, losa de piso y zona. La losa se crea básica con el espesor pedido (`slabStructure: "default"` conserva la estructura de la herramienta Losa). La zona se ubica automáticamente; como Archicad solo lo logra en el piso abierto en pantalla, en otros pisos se dibuja por el contorno interior de los muros. |
+| `create_slabs`, `set_slab_levels`, `create_meshes`, `set_mesh`, `create_surface_morph`, `move_elements`, `rotate_elements`, `classify_elements`, `apply_dimension_favorite` | Crean losas, mallas y morphs, cambian niveles, mueven, rotan, clasifican y aplican favoritos de cota; todas aceptan `dryRun` y se pueden revertir. |
+| `classification_items` / `element_images` | Lista los ítems de clasificación disponibles y genera imágenes de elementos. |
+| `undo` / `history` | Revierte las últimas acciones de las tools que modifican el modelo (borra lo creado y restaura lo cambiado) y lista lo que se puede revertir. |
 | `tapir_list_commands` | Lista los comandos de Tapir, filtrando por grupo o texto. |
 | `tapir_describe_command` | Devuelve el JSON Schema de entrada y salida de un comando. |
 | `tapir_run_command` | Ejecuta cualquier comando de Tapir, validando los parámetros antes de enviarlos. |
-| `archicad_run_api_command` | Ejecuta cualquier comando oficial `API.*`. |
+| `run_api_command` | Ejecuta cualquier comando oficial `API.*`. |
 | 30 comandos de Tapir como tools propias | Los más usados (`GetSelectedElements`, `GetElementsByType`, `GetPropertyValuesOfElements`, `CreateWalls`, `CreateSlabs`, `MoveElements`, `DeleteElements`, etc.), con el schema exacto de Tapir. |
 
 Cada tool va marcada como de solo lectura o destructiva, para que el cliente pida confirmación donde corresponde.
 
-Las tools que modifican el modelo aceptan `dryRun: true` para mostrar qué harían sin tocar nada. Archicad no permite agrupar varias acciones en un solo Cmd+Z, así que cada cambio queda registrado en `~/.archicad-mcp/journal.json` (configurable con `ARCHICAD_MCP_JOURNAL`) y `archicad_undo` lo revierte, aunque se haya reiniciado Claude. Cada registro guarda el proyecto al que pertenece, así que solo se revierte en el proyecto correcto.
+Las tools que modifican el modelo aceptan `dryRun: true` para mostrar qué harían sin tocar nada. Archicad no permite agrupar varias acciones en un solo Cmd+Z, así que cada cambio queda registrado en `~/.archicad-mcp/journal.json` (configurable con `ARCHICAD_MCP_JOURNAL`) y `undo` lo revierte, aunque se haya reiniciado Claude. Cada registro guarda el proyecto al que pertenece, así que solo se revierte en el proyecto correcto.
 
-Las cuatro tools `archicad_model_summary`, `archicad_list_elements`, `archicad_quantities` y `archicad_check_model` solo leen el modelo, así que también están disponibles en modo solo lectura. Al conectarse, el servidor lee la versión instalada de Tapir y oculta los comandos que esa versión todavía no tiene.
+Las cuatro tools `model_summary`, `list_elements`, `quantities` y `check_model` solo leen el modelo, así que también están disponibles en modo solo lectura. Al conectarse, el servidor lee la versión instalada de Tapir y oculta los comandos que esa versión todavía no tiene.
 
 ## Opciones (variables de entorno)
 

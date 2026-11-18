@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "archicad-tapir-mcp"
-version = "0.1.0"
-description = "MCP server that lets Claude control Archicad through the JSON API and the Tapir add-on"
+name = "archicad-mcp"
+version = "0.3.0"
+description = "MCP server to work with a running Archicad through the JSON API and the Tapir add-on"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -15,7 +15,8 @@ dependencies = ["mcp>=2.2,<3", "jsonschema>=4.18"]
 test = ["pytest>=8", "anyio>=4"]
 
 [project.scripts]
-archicad-tapir-mcp = "archicad_mcp.server:main"
+archicad-mcp = "archicad_mcp.server:main"
+archicad-tapir-mcp = "archicad_mcp.server:main"  # old name, kept for existing configs
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/archicad_mcp"]

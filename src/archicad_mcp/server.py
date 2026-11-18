@@ -1,14 +1,14 @@
 """MCP server exposing Archicad through the official JSON API and Tapir.
 
 Tools:
-  * archicad_status: finds running Archicad instances and checks Tapir.
-  * archicad_model_summary / archicad_list_elements / archicad_quantities /
-    archicad_check_model: read-only overviews built on several commands.
-  * archicad_set_element_ids / archicad_create_room:
-    model changes recorded in a journal, reverted with archicad_undo.
+  * status: finds running Archicad instances and checks Tapir.
+  * model_summary / list_elements / quantities /
+    check_model: read-only overviews built on several commands.
+  * set_element_ids / create_room:
+    model changes recorded in a journal, reverted with undo.
   * tapir_list_commands / tapir_describe_command / tapir_run_command:
     reach any of the ~250 Tapir commands, validated against their schema.
-  * archicad_run_api_command: any official "API.*" command.
+  * run_api_command: any official "API.*" command.
   * one tool per Tapir command in ARCHICAD_MCP_TOOLS (default: a curated set),
     using the command's own JSON schema as the tool input schema. Commands
     newer than the installed Tapir add-on are hidden.
@@ -18,7 +18,7 @@ Environment variables:
   ARCHICAD_MCP_TOOLS: "curated" (default), "all" or "none".
   ARCHICAD_MCP_READ_ONLY=1: refuse every command that is not read-only.
   ARCHICAD_MCP_MAX_CHARS: maximum length of a tool response (default 100000).
-  ARCHICAD_MCP_JOURNAL: journal file for archicad_undo (default ~/.archicad-mcp/journal.json).
+  ARCHICAD_MCP_JOURNAL: journal file for undo (default ~/.archicad-mcp/journal.json).
 """
 
 from __future__ import annotations
@@ -40,12 +40,12 @@ from .insights import DESCRIPTIONS, SCHEMAS, Insights
 
 INSTRUCTIONS = """\
 Controls a running Archicad through its JSON API and the Tapir add-on.
-Start with archicad_status if unsure Archicad is reachable, and with
-archicad_model_summary to understand the open project. Prefer
-archicad_list_elements, archicad_quantities and archicad_check_model over
-raw commands: they answer in one call with compact results. For changes,
-prefer archicad_set_element_ids and archicad_create_room: they can be
-reverted with archicad_undo. Avoid SetStories: it rebuilds the story
+Start with status if unsure Archicad is reachable, and with model_summary
+to understand the open project. Prefer list_elements, quantities and
+check_model over raw commands: they answer in one call with compact
+results. For changes, prefer the snake_case edit tools (set_element_ids,
+create_room, move_elements...): history lists them and undo reverts
+them, which raw Tapir commands do not. Avoid SetStories: it rebuilds the story
 structure and has deleted elements in a real project. Use dryRun to
 show the user large changes before applying them. When calling
 GetDetailsOfElements, pass "fields" to get only what you need. Elements are
@@ -76,7 +76,7 @@ def object_schema(required: list[str] | None = None, **properties: Any) -> dict[
 
 GENERIC_TOOLS = [
     tool(
-        "archicad_status",
+        "status",
         "Lists the running Archicad instances (port, version) and whether the Tapir add-on answers.",
         object_schema(),
         read_only_hint=True,
@@ -108,7 +108,7 @@ GENERIC_TOOLS = [
         destructive_hint=True,
     ),
     tool(
-        "archicad_run_api_command",
+        "run_api_command",
         "Runs an official Archicad JSON API command, e.g. 'API.GetElementsByType' or "
         "'API.GetBuiltInPropertyIds'. See Graphisoft's JSON API reference for parameters.",
         object_schema(
@@ -128,7 +128,7 @@ EDIT_TOOLS = [
         EDIT_DESCRIPTIONS[name],
         schema,
         read_only_hint=name in READ_ONLY_EDIT_TOOLS,
-        destructive_hint=None if name in READ_ONLY_EDIT_TOOLS else name == "archicad_undo",
+        destructive_hint=None if name in READ_ONLY_EDIT_TOOLS else name == "undo",
     )
     for name, schema in EDIT_SCHEMAS.items()
 ]
@@ -186,7 +186,7 @@ class ArchicadMCP:
         self.tapir_version: str | None = None
         self.unsupported: set[str] = set()
         self.server = Server(
-            "archicad-tapir",
+            "archicad",
             version=__version__,
             instructions=INSTRUCTIONS,
             on_list_tools=self.list_tools,
@@ -216,15 +216,15 @@ class ArchicadMCP:
         except (OSError, ValueError) as error:
             return text_result(
                 f"Lost the connection to Archicad ({error.__class__.__name__}: {error}). "
-                "Archicad may be busy or closed; retry, or run archicad_status.",
+                "Archicad may be busy or closed; retry, or run status.",
                 self.max_chars,
                 is_error=True,
             )
 
     async def dispatch(self, name: str, args: dict[str, Any]) -> types.CallToolResult:
-        if name == "archicad_status":
+        if name == "status":
             return await self.status()
-        if name == "archicad_element_images":
+        if name == "element_images":
             return await self.element_images(args)
         if name in SCHEMAS:
             return text_result(await self.insights.run(name, args), self.max_chars)
@@ -255,7 +255,7 @@ class ArchicadMCP:
             )
         if name == "tapir_run_command":
             return await self.run_tapir(args.get("command", ""), args.get("parameters") or {})
-        if name == "archicad_run_api_command":
+        if name == "run_api_command":
             command = args.get("command", "")
             if not command.startswith("API."):
                 return text_result("Official commands start with 'API.'.", self.max_chars, is_error=True)

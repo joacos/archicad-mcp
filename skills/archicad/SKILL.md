@@ -1,56 +1,58 @@
 ---
 name: archicad
-description: Trabaja con un Archicad abierto a través del servidor MCP archicad-tapir (API JSON de Graphisoft + add-on Tapir). Usar cuando el usuario pida consultar, computar, revisar, crear o modificar elementos de su modelo de Archicad - muros, losas, zonas, mallas, IDs, clasificaciones, propiedades, cómputo métrico, chequeo de calidad o selección actual.
+description: Work with a running Archicad through the archicad MCP server (Graphisoft JSON API + Tapir add-on). Use when the user wants to read, quantify, check, create or change elements of their Archicad model - walls, slabs, zones, meshes, element IDs, classifications, properties, quantity take-offs, model quality checks or the current selection.
 ---
 
-# Archicad (MCP archicad-tapir)
+# Archicad
 
-Este skill guía el uso de las tools del servidor MCP `archicad-tapir-mcp`. Si las tools `archicad_*` / `tapir_*` no están disponibles, pedile al usuario que instale el servidor (ver README del repo: https://github.com/joacos/archicad-mcp) y que tenga Archicad abierto con el add-on Tapir.
+This skill guides the use of the `archicad` MCP server's tools. If tools such as `status` or `model_summary` from the `archicad` server are not available, ask the user to install it (see https://github.com/joacos/archicad-mcp) and to have Archicad open with the Tapir add-on.
 
-## Antes de empezar
+## Before you start
 
-1. `archicad_status`: confirma que Archicad responde y qué versión de Tapir hay. Si falla: Archicad cerrado, Tapir no instalado, o varios Archicad abiertos (fijar `ARCHICAD_PORT`).
-2. `archicad_model_summary`: pisos, cantidad de elementos por tipo/piso/capa, zonas y selección actual. Usalo para orientarte antes de cualquier otra cosa.
+1. `status`: checks that Archicad answers and which Tapir version is installed. If it fails: Archicad is closed, Tapir is not installed, or several Archicads are open (set `ARCHICAD_PORT`).
+2. `model_summary`: stories, element counts by type/story/layer, zones and the current selection. Use it to get oriented before anything else.
 
-## Leer el modelo (preferir estas tools)
+## Reading the model (prefer these tools)
 
-| Necesidad | Tool |
+| Need | Tool |
 | --- | --- |
-| Listar elementos (guid, tipo, ID, piso, capa) | `archicad_list_elements` |
-| Cómputo métrico (largos, superficies, volúmenes) en JSON o CSV | `archicad_quantities` |
-| Chequeo de calidad (IDs vacíos/repetidos, sin clasificar, duplicados, capas ocultas, zonas sin superficie) | `archicad_check_model` |
-| Ítems de clasificación disponibles | `archicad_classification_items` |
-| Imágenes de elementos | `archicad_element_images` |
-| Lo seleccionado por el usuario | `GetSelectedElements` |
+| List elements (guid, type, ID, story, layer) | `list_elements` |
+| Quantity take-off (lengths, areas, volumes) as JSON or CSV | `quantities` |
+| Quality checks (empty/duplicate IDs, unclassified, duplicates, hidden layers, zones without area) | `check_model` |
+| Available classification items | `classification_items` |
+| Element images | `element_images` |
+| What the user has selected | `GetSelectedElements` |
 
-Responden en una sola llamada y con resultados compactos; usalas antes que comandos crudos. Con `GetDetailsOfElements`, pasá siempre `fields` para traer solo lo necesario.
+They answer in one call with compact results; use them before raw commands. With `GetDetailsOfElements`, always pass `fields` to get only what you need.
 
-## Modificar el modelo (reversibles)
+## Changing the model (undoable)
 
-Estas tools aceptan `dryRun: true` y quedan registradas en un journal que `archicad_undo` revierte (aunque se reinicie el cliente):
+These tools accept `dryRun: true` and are recorded in a journal that `undo` reverts, even after the client restarts:
 
-`archicad_set_element_ids`, `archicad_create_room`, `archicad_create_slabs`, `archicad_set_slab_levels`, `archicad_create_meshes`, `archicad_set_mesh`, `archicad_create_surface_morph`, `archicad_move_elements`, `archicad_rotate_elements`, `archicad_classify_elements`, `archicad_apply_dimension_favorite`.
+`set_element_ids`, `create_room`, `create_slabs`, `set_slab_levels`, `create_meshes`, `set_mesh`, `create_surface_morph`, `move_elements`, `rotate_elements`, `classify_elements`, `apply_dimension_favorite`.
 
-- `archicad_history` lista lo que se puede revertir; `archicad_undo` lo revierte.
-- Para cambios grandes: primero `dryRun: true`, mostrale el resultado al usuario y pedí confirmación.
-- Preferí estas tools a `CreateWalls`, `MoveElements`, etc.: los comandos crudos no se pueden revertir con `archicad_undo`.
+- `history` lists what can be reverted; `undo` reverts it.
+- For large changes: run with `dryRun: true` first, show the result to the user and ask for confirmation.
+- Prefer these tools over `CreateWalls`, `MoveElements`, etc.: raw commands cannot be reverted with `undo`.
+- Column and beam segment IDs cannot be changed through the API; `set_element_ids` skips them and lists them under `skipped`.
 
-## Reglas
+## Rules
 
-- **Nunca** uses `SetStories`: reconstruye la estructura de pisos y borró elementos en un proyecto real.
-- Preguntá antes de borrar elementos (`DeleteElements`) o de hacer cambios masivos.
-- Unidades: largos en metros, ángulos en radianes.
-- Los elementos se identifican como `{"elementId": {"guid": "..."}}`. Obtenelos con `GetSelectedElements`, `GetElementsByType`, `FilterElements` o `archicad_list_elements`, y pasalos a los comandos de detalle, propiedades, clasificación o modificación.
-- `archicad_create_room` ubica la zona automáticamente solo en el piso abierto en pantalla; en otros pisos la dibuja por el contorno interior de los muros.
+- **Never** use `SetStories`: it rebuilds the story structure and has deleted elements in a real project.
+- Ask before deleting elements (`DeleteElements`) or making large changes.
+- Units: lengths in meters, angles in radians.
+- Elements are identified as `{"elementId": {"guid": "..."}}`. Get them from `GetSelectedElements`, `GetElementsByType`, `FilterElements` or `list_elements`, and pass them to detail, property, classification or modification commands.
+- `create_room` places the zone automatically only on the story open on screen; on other stories it draws it along the inner outline of the walls.
 
-## Comandos que no tienen tool propia
+## Commands without their own tool
 
-- `tapir_list_commands` (filtrar por grupo o texto) → `tapir_describe_command` (schema de entrada/salida) → `tapir_run_command` (valida antes de enviar).
-- Comandos oficiales `API.*`: `archicad_run_api_command`.
+- `tapir_list_commands` (filter by group or text) → `tapir_describe_command` (input/output schema) → `tapir_run_command` (validates before sending).
+- Official `API.*` commands: `run_api_command`.
 
-## Flujos típicos
+## Typical flows
 
-- **"¿Qué tengo seleccionado?"** → `GetSelectedElements` → `archicad_list_elements` o `GetDetailsOfElements` con `fields`.
-- **Cómputo** → `archicad_quantities` por tipo, agrupando por piso o capa; pedí CSV si el usuario lo quiere en planilla.
-- **Limpiar IDs** → `archicad_check_model` → `archicad_set_element_ids` con `fixDuplicates` o `numbering` (ej. prefijo `FU-`), primero en `dryRun`.
-- **Crear una habitación** → `archicad_create_room` con el contorno, alto de muros y espesor de losa; `dryRun` primero si no está claro.
+- **"What do I have selected?"** → `GetSelectedElements` → `list_elements` or `GetDetailsOfElements` with `fields`.
+- **Take-off** → `quantities` by type, grouped by story or layer; ask for CSV if the user wants a spreadsheet.
+- **Clean up IDs** → `check_model` → `set_element_ids` with `fixDuplicates` or `numbering` (e.g. prefix `FU-`), in `dryRun` first.
+- **Create a room** → `create_room` with the outline, wall height and slab thickness; `dryRun` first if anything is unclear.
+- Reply in the user's language.

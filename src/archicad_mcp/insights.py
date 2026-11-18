@@ -80,8 +80,8 @@ SCOPE_PROPERTIES = {
 }
 
 SCHEMAS: dict[str, dict[str, Any]] = {
-    "archicad_model_summary": {"type": "object", "properties": {}, "additionalProperties": False},
-    "archicad_list_elements": {
+    "model_summary": {"type": "object", "properties": {}, "additionalProperties": False},
+    "list_elements": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -89,7 +89,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_quantities": {
+    "quantities": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -108,7 +108,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_check_model": {
+    "check_model": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -122,7 +122,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_element_images": {
+    "element_images": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -135,23 +135,23 @@ SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 DESCRIPTIONS = {
-    "archicad_model_summary": (
+    "model_summary": (
         "One-call overview of the open project: project info, stories, element counts by type, story and "
         "layer, zone areas and the current selection. Start here to understand a model."
     ),
-    "archicad_list_elements": (
+    "list_elements": (
         "Compact list of elements (guid, type, ID, story name, layer name). Much smaller than "
         "GetDetailsOfElements; use it to find elements before acting on them."
     ),
-    "archicad_quantities": (
+    "quantities": (
         "Quantity take-off from Archicad's built-in properties: lengths (m), areas (m²), volumes (m³) and "
         "counts, totalled by element type and optionally by story or layer, as JSON or CSV."
     ),
-    "archicad_element_images": (
+    "element_images": (
         "Returns images of elements so you can see them: a 3D, 2D or section preview of each element, and "
         "a floor plan clip of each zone. Defaults to the selection when no scope is given."
     ),
-    "archicad_check_model": (
+    "check_model": (
         "Model quality checks: missing or duplicate IDs, unclassified elements, probable duplicate "
         "elements, elements on hidden or locked layers, zones without area, unnamed or empty stories."
     ),
@@ -168,13 +168,13 @@ class Insights:
         self._property_ids: dict[str, dict[str, Any] | None] = {}
 
     async def run(self, name: str, args: dict[str, Any]) -> Any:
-        if name == "archicad_model_summary":
+        if name == "model_summary":
             return await self.model_summary()
-        if name == "archicad_list_elements":
+        if name == "list_elements":
             return await self.list_elements(args)
-        if name == "archicad_quantities":
+        if name == "quantities":
             return await self.quantities(args)
-        if name == "archicad_check_model":
+        if name == "check_model":
             return await self.check_model(args)
         raise KeyError(name)
 

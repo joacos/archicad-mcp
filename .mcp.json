@@ -2,7 +2,7 @@
   "mcpServers": {
     "archicad": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-tapir-mcp"]
+      "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-mcp"]
     }
   }
 }

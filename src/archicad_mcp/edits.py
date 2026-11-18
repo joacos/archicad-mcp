@@ -3,7 +3,7 @@
 Archicad has no API to group several commands into one undo step, so every
 change made here is recorded in a journal (a JSON file) together with what
 is needed to revert it: the guids of created elements, or the previous IDs
-and story names. archicad_undo replays that journal backwards.
+and story names. undo replays that journal backwards.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ POINT3 = {
 }
 
 EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "archicad_set_element_ids": {
+    "set_element_ids": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -73,7 +73,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_classification_items": {
+    "classification_items": {
         "type": "object",
         "properties": {
             "system": {"type": "string", "description": "Part of the classification system name; the first one by default."},
@@ -81,7 +81,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_classify_elements": {
+    "classify_elements": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -95,7 +95,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
                     "properties": {
                         "item": {
                             "type": "string",
-                            "description": "Classification item ID (e.g. 'Terrain') or full path (e.g. 'Site/Massing/Morph'); see archicad_classification_items.",
+                            "description": "Classification item ID (e.g. 'Terrain') or full path (e.g. 'Site/Massing/Morph'); see classification_items.",
                         },
                         "elementType": {"type": "string", "description": "Match elements of this type, e.g. 'Slab'."},
                         "layer": {"type": "string", "description": "Match elements on the layer with exactly this name."},
@@ -114,7 +114,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["rules"],
         "additionalProperties": False,
     },
-    "archicad_create_room": {
+    "create_room": {
         "type": "object",
         "properties": {
             "polygon": {
@@ -143,7 +143,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["polygon"],
         "additionalProperties": False,
     },
-    "archicad_create_slabs": {
+    "create_slabs": {
         "type": "object",
         "properties": {
             "slabs": {
@@ -169,7 +169,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["slabs"],
         "additionalProperties": False,
     },
-    "archicad_move_elements": {
+    "move_elements": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -184,7 +184,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["vector"],
         "additionalProperties": False,
     },
-    "archicad_rotate_elements": {
+    "rotate_elements": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -200,7 +200,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["origin", "degrees"],
         "additionalProperties": False,
     },
-    "archicad_set_slab_levels": {
+    "set_slab_levels": {
         "type": "object",
         "properties": {
             **SCOPE_PROPERTIES,
@@ -216,7 +216,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
     },
-    "archicad_set_mesh": {
+    "set_mesh": {
         "type": "object",
         "properties": {
             "guid": {"type": "string", "description": "The Mesh to change."},
@@ -243,7 +243,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["guid"],
         "additionalProperties": False,
     },
-    "archicad_create_meshes": {
+    "create_meshes": {
         "type": "object",
         "properties": {
             "meshes": {
@@ -270,7 +270,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["meshes"],
         "additionalProperties": False,
     },
-    "archicad_create_surface_morph": {
+    "create_surface_morph": {
         "type": "object",
         "properties": {
             "vertices": {"type": "array", "items": POINT3, "minItems": 3, "description": "World coordinates."},
@@ -293,7 +293,7 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "additionalProperties": False,
     },
 
-    "archicad_apply_dimension_favorite": {
+    "apply_dimension_favorite": {
         "type": "object",
         "properties": {
             "favoriteName": {"type": "string", "description": "Name of the favorite to apply to all dimensions."}
@@ -302,73 +302,73 @@ EDIT_SCHEMAS: dict[str, dict[str, Any]] = {
         "additionalProperties": False,
     },
 
-    "archicad_undo": {
+    "undo": {
         "type": "object",
         "properties": {
             "steps": {"type": "integer", "minimum": 1, "default": 1, "description": "How many actions to revert."}
         },
         "additionalProperties": False,
     },
-    "archicad_history": {"type": "object", "properties": {}, "additionalProperties": False},
+    "history": {"type": "object", "properties": {}, "additionalProperties": False},
 }
 
 EDIT_DESCRIPTIONS = {
-    "archicad_set_element_ids": (
+    "set_element_ids": (
         "Changes element IDs: explicit values, unique suffixes for repeated IDs (fixDuplicates) or a "
-        "prefix + number sequence (numbering). Revert with archicad_undo."
+        "prefix + number sequence (numbering). Revert with undo."
     ),
-    "archicad_classification_items": (
-        "Lists the items of a classification system with their path, to use in archicad_classify_elements."
+    "classification_items": (
+        "Lists the items of a classification system with their path, to use in classify_elements."
     ),
-    "archicad_classify_elements": (
+    "classify_elements": (
         "Classifies many elements at once with rules by element type and/or layer (e.g. every Slab on layer "
-        "'02 PLAZA - Pasto' as 'Terrain'), by default only those still unclassified. Revert with archicad_undo."
+        "'02 PLAZA - Pasto' as 'Terrain'), by default only those still unclassified. Revert with undo."
     ),
-    "archicad_create_room": (
+    "create_room": (
         "Creates a room from an outline: walls along its edges, a floor slab and a zone, on one story. "
-        "Revert with archicad_undo."
+        "Revert with undo."
     ),
-    "archicad_create_slabs": (
+    "create_slabs": (
         "Creates many homogeneous slabs at once (site blocks, platforms, masses) with an exact top level and "
-        "thickness, optionally on a named layer. Revert with archicad_undo."
+        "thickness, optionally on a named layer. Revert with undo."
     ),
-    "archicad_move_elements": (
-        "Moves elements (explicit list, selection or a type) by a vector in meters. Revert with archicad_undo."
+    "move_elements": (
+        "Moves elements (explicit list, selection or a type) by a vector in meters. Revert with undo."
     ),
-    "archicad_rotate_elements": (
-        "Rotates elements in plan around a point by an angle in degrees. Revert with archicad_undo."
+    "rotate_elements": (
+        "Rotates elements in plan around a point by an angle in degrees. Revert with undo."
     ),
-    "archicad_set_slab_levels": (
+    "set_slab_levels": (
         "Changes the top level and/or thickness of slabs (e.g. the height of site masses), verifying the "
-        "result in 3D. Revert with archicad_undo."
+        "result in 3D. Revert with undo."
     ),
-    "archicad_set_mesh": (
+    "set_mesh": (
         "Changes a Mesh (terrain): its level, skirt depth and holes. Works on locked layers and checks the "
-        "result in 3D. Revert with archicad_undo."
+        "result in 3D. Revert with undo."
     ),
-    "archicad_create_meshes": (
+    "create_meshes": (
         "Creates terrain Meshes with heights per point (surveyed ground, paths, curbs), as solid bodies, "
-        "optionally on a named layer. Revert with archicad_undo."
+        "optionally on a named layer. Revert with undo."
     ),
-    "archicad_create_surface_morph": (
+    "create_surface_morph": (
         "Creates a Morph surface from triangles (e.g. a path draped on terrain) with its own building "
-        "material, so it reads differently from the mesh below. Revert with archicad_undo."
+        "material, so it reads differently from the mesh below. Revert with undo."
     ),
-    "archicad_apply_dimension_favorite": (
+    "apply_dimension_favorite": (
         "Applies a named favorite to all dimensions in the project (linear, level, radial, angle). "
         "Each dimension's previous settings are kept as a temporary '~mcp-undo' favorite until undone. "
-        "Revert with archicad_undo."
+        "Revert with undo."
     ),
-    "archicad_undo": (
-        "Reverts the last actions made with archicad_set_element_ids, archicad_classify_elements, archicad_create_slabs, "
-        "archicad_create_meshes, archicad_move_elements, archicad_rotate_elements, archicad_set_slab_levels, "
-        "archicad_set_mesh, archicad_create_surface_morph, archicad_apply_dimension_favorite or "
-        "archicad_create_room in the open project: deletes what they created and restores what they changed."
+    "undo": (
+        "Reverts the last actions made with set_element_ids, classify_elements, create_slabs, "
+        "create_meshes, move_elements, rotate_elements, set_slab_levels, "
+        "set_mesh, create_surface_morph, apply_dimension_favorite or "
+        "create_room in the open project: deletes what they created and restores what they changed."
     ),
-    "archicad_history": "Lists the actions archicad_undo can revert in the open project, newest first.",
+    "history": "Lists the actions undo can revert in the open project, newest first.",
 }
 FIXED_ID_TYPES = {"ColumnSegment", "BeamSegment"}
-READ_ONLY_EDIT_TOOLS = {"archicad_history", "archicad_classification_items"}
+READ_ONLY_EDIT_TOOLS = {"history", "classification_items"}
 
 
 def journal_path() -> Path:
@@ -440,26 +440,26 @@ class Edits:
 
     async def run(self, name: str, args: dict[str, Any]) -> Any:
         handlers = {
-            "archicad_set_element_ids": self.set_element_ids,
-            "archicad_classification_items": self.classification_items,
-            "archicad_classify_elements": self.classify_elements,
-            "archicad_create_room": self.create_room,
-            "archicad_create_slabs": self.create_slabs,
-            "archicad_move_elements": self.move_elements,
-            "archicad_rotate_elements": self.rotate_elements,
-            "archicad_set_slab_levels": self.set_slab_levels,
-            "archicad_set_mesh": self.set_mesh,
-            "archicad_create_meshes": self.create_meshes,
-            "archicad_create_surface_morph": self.create_surface_morph,
+            "set_element_ids": self.set_element_ids,
+            "classification_items": self.classification_items,
+            "classify_elements": self.classify_elements,
+            "create_room": self.create_room,
+            "create_slabs": self.create_slabs,
+            "move_elements": self.move_elements,
+            "rotate_elements": self.rotate_elements,
+            "set_slab_levels": self.set_slab_levels,
+            "set_mesh": self.set_mesh,
+            "create_meshes": self.create_meshes,
+            "create_surface_morph": self.create_surface_morph,
 
-            "archicad_apply_dimension_favorite": self.apply_dimension_favorite,
+            "apply_dimension_favorite": self.apply_dimension_favorite,
 
         }
         if name in handlers:
             return await handlers[name](args)
-        if name == "archicad_undo":
+        if name == "undo":
             return await self.undo(args.get("steps", 1))
-        if name == "archicad_history":
+        if name == "history":
             project = await self.project()
             return [
                 {k: e[k] for k in ("id", "time", "tool", "summary")}
@@ -666,7 +666,7 @@ class Edits:
         if not changes:
             return {"changes": [], "problems": problems or None, **note}
         entry = await self.record(
-            "archicad_set_element_ids",
+            "set_element_ids",
             f"Changed {len(changes)} element IDs",
             [{"op": "setIds", "values": [{"guid": c["guid"], "id": c["from"]} for c in changes]}],
         )
@@ -740,7 +740,7 @@ class Edits:
             if len(found) != 1:
                 raise ArchicadError(
                     f"Item {rule['item']!r} "
-                    + (f"is ambiguous: {[e['path'] for e in found]}." if found else "was not found; use archicad_classification_items.")
+                    + (f"is ambiguous: {[e['path'] for e in found]}." if found else "was not found; use classification_items.")
                 )
             names[found[0]["guid"]] = found[0]["path"]
             rules.append({**rule, "guid": found[0]["guid"]})
@@ -784,7 +784,7 @@ class Edits:
             return {"dryRun": bool(args.get("dryRun")), **summary, "sample": [{k: c[k] for k in ("guid", "type", "layer")} for c in changes[:10]]}
         problems = await self.write_classifications(system, changes)
         entry = await self.record(
-            "archicad_classify_elements",
+            "classify_elements",
             f"Classified {len(changes)} elements ({', '.join(f'{n} x {k}' for k, n in by_item.items())})",
             [{"op": "classify", "system": system, "values": [{"guid": c["guid"], "item": c["before"]} for c in changes]}],
         )
@@ -895,7 +895,7 @@ class Edits:
             entry = None
             if created:
                 entry = await self.record(
-                    "archicad_create_room",
+                    "create_room",
                     f"Created room{' ' + args['zoneName'] if args.get('zoneName') else ''} "
                     f"({len(created)} elements) on story {floor}",
                     [{"op": "delete", "elements": [element(g) for g in created]}],
@@ -992,7 +992,7 @@ class Edits:
             entry = None
             if created:
                 entry = await self.record(
-                    "archicad_create_slabs",
+                    "create_slabs",
                     f"Created {len(created)} slabs"
                     + (f" on layer {args['layer']}" if args.get("layer") else "")
                     + f" (top {top:g} m, {thickness:g} m thick)",
@@ -1105,7 +1105,7 @@ class Edits:
             return {"dryRun": bool(args.get("dryRun")), "origin": origin, "degrees": degrees, "elements": rows}
         problems = await self.rotate(elements, origin, degrees)
         entry = await self.record(
-            "archicad_rotate_elements",
+            "rotate_elements",
             f"Rotated {len(elements)} elements by {degrees:g}° around ({origin['x']:.2f}, {origin['y']:.2f})",
             [{"op": "rotate", "elements": elements, "origin": origin, "degrees": -degrees}],
         )
@@ -1118,7 +1118,7 @@ class Edits:
             return {"dryRun": bool(args.get("dryRun")), "vector": vector, "elements": rows}
         problems = await self.move(elements, vector)
         entry = await self.record(
-            "archicad_move_elements",
+            "move_elements",
             f"Moved {len(elements)} elements by ({vector['x']:.3f}, {vector['y']:.3f}, {vector['z']:.3f}) m",
             [{"op": "move", "elements": elements, "vector": {k: -v for k, v in vector.items()}}],
         )
@@ -1194,7 +1194,7 @@ class Edits:
             return {"dryRun": bool(args.get("dryRun")), **summary}
         problems = await self.write_slab_levels(new)
         entry = await self.record(
-            "archicad_set_slab_levels",
+            "set_slab_levels",
             f"Changed {len(new)} slabs to z {summary['to'][0][0]:g}..{summary['to'][0][1]:g} m"
             + (f" on layer {args['layer']}" if args.get("layer") else ""),
             [{"op": "slabLevels", "values": old}],
@@ -1259,7 +1259,7 @@ class Edits:
                     f"asked for {len(data['holes'])} holes, the mesh has {got}: holes must lie strictly inside the outline"
                 )
         entry = await self.record(
-            "archicad_set_mesh",
+            "set_mesh",
             f"Changed mesh {guid[:8]}: "
             + ", ".join(f"{k} {v if k != 'holes' else len(v)}" for k, v in data.items() if not k.startswith("polygon")),
             [{"op": "meshData", "guid": guid, "data": previous}],
@@ -1306,7 +1306,7 @@ class Edits:
             entry = None
             if created:
                 entry = await self.record(
-                    "archicad_create_meshes",
+                    "create_meshes",
                     f"Created {len(created)} meshes" + (f" on layer {args['layer']}" if args.get("layer") else ""),
                     [{"op": "delete", "elements": [element(g) for g in created]}],
                 )
@@ -1355,7 +1355,7 @@ class Edits:
         entry = None
         if guids:
             entry = await self.record(
-                "archicad_create_surface_morph",
+                "create_surface_morph",
                 f"Created {'solid' if args.get('solid') else 'surface'} morph ({len(faces)} faces)" + (f" on layer {args['layer']}" if args.get("layer") else ""),
                 [{"op": "delete", "elements": [element(g) for g in guids]}],
             )
@@ -1397,7 +1397,7 @@ class Edits:
             return {"applied": 0, "note": "No dimensions found in the project."}
 
         # Archicad cannot read back every setting a favorite changes, so each dimension's current
-        # settings are saved as a temporary favorite that archicad_undo reapplies and then deletes.
+        # settings are saved as a temporary favorite that undo reapplies and then deletes.
         # ponytail: one favorite per dimension; dedupe identical settings if the palette gets too big.
         stamp = time.strftime("%Y%m%d-%H%M%S")
         snapshots = [{"guid": g, "favorite": f"~mcp-undo {stamp} {g}"} for g in guids]
@@ -1421,7 +1421,7 @@ class Edits:
         entry = None
         if applied:
             entry = await self.record(
-                "archicad_apply_dimension_favorite",
+                "apply_dimension_favorite",
                 f"Applied favorite '{favorite}' to {len(applied)} dimensions",
                 [{"op": "favorites", "values": applied}],
             )

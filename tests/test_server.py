@@ -289,7 +289,7 @@ def make_server(port, monkeypatch, **env):
 async def test_lists_curated_tools_with_tapir_schemas(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert {"archicad_status", "tapir_run_command", "CreateWalls", "GetSelectedElements"} <= set(tools)
+    assert {"status", "tapir_run_command", "CreateWalls", "GetSelectedElements"} <= set(tools)
     assert tools["GetSelectedElements"].annotations.read_only_hint is True
     assert tools["DeleteElements"].annotations.destructive_hint is True
     assert "$defs" in tools["CreateWalls"].input_schema
@@ -298,7 +298,7 @@ async def test_lists_curated_tools_with_tapir_schemas(archicad_port, monkeypatch
 @pytest.mark.anyio
 async def test_status_reports_version(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        result = await client.call_tool("archicad_status", {})
+        result = await client.call_tool("status", {})
     report = json.loads(text(result))
     assert report["instances"][0]["version"] == 29
     assert report["tapirAddOnVersion"] == "1.6.1"
@@ -339,7 +339,7 @@ async def test_read_only_mode_blocks_changes(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_official_api_errors_are_reported(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        result = await client.call_tool("archicad_run_api_command", {"command": "API.DoesNotExist"})
+        result = await client.call_tool("run_api_command", {"command": "API.DoesNotExist"})
     assert result.is_error and "Unknown command" in text(result)
 
 
@@ -350,7 +350,7 @@ async def test_stdio_process(archicad_port):
     )
     async with Client(params) as client:
         result = await client.call_tool("tapir_list_commands", {"search": "wall"})
-        status = await client.call_tool("archicad_status", {})
+        status = await client.call_tool("status", {})
     assert "CreateWalls" in text(result)
     assert json.loads(text(status))["connectedPort"] == archicad_port
 
@@ -370,7 +370,7 @@ async def test_commands_newer_than_installed_tapir_are_hidden(archicad_port, mon
     async with Client(make_server(archicad_port, monkeypatch, ARCHICAD_MCP_TOOLS="all")) as client:
         names = {t.name for t in (await client.list_tools()).tools}
         result = await client.call_tool("tapir_run_command", {"command": "GetIFCExportTranslators", "parameters": {}})
-        status = json.loads(text(await client.call_tool("archicad_status", {})))
+        status = json.loads(text(await client.call_tool("status", {})))
     assert "GetIFCExportTranslators" not in names and "GetAllElements" in names
     assert result.is_error and "1.6.0" in text(result)
     assert "GetIFCExportTranslators" in status["commandsNeedingNewerTapir"]
@@ -379,7 +379,7 @@ async def test_commands_newer_than_installed_tapir_are_hidden(archicad_port, mon
 @pytest.mark.anyio
 async def test_model_summary(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        summary = json.loads(text(await client.call_tool("archicad_model_summary", {})))
+        summary = json.loads(text(await client.call_tool("model_summary", {})))
     assert summary["elementCount"] == 4
     assert summary["byType"] == {"Wall": 3, "Zone": 1}
     assert summary["zones"] == {"count": 1, "totalCalculatedArea_m2": 20.0}
@@ -390,7 +390,7 @@ async def test_model_summary(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_list_elements_is_compact(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        result = json.loads(text(await client.call_tool("archicad_list_elements", {"elementType": "Wall", "limit": 2})))
+        result = json.loads(text(await client.call_tool("list_elements", {"elementType": "Wall", "limit": 2})))
     assert result["total"] == 3 and len(result["elements"]) == 2
     assert result["elements"][0] == {"guid": WALLS[0], "type": "Wall", "id": "W-1", "story": "Planta baja", "layer": "Muros"}
     sent = [r for r in FakeArchicad.received if r["parameters"].get("addOnCommandId", {}).get("commandName") == "GetDetailsOfElements"]
@@ -400,8 +400,8 @@ async def test_list_elements_is_compact(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_quantities_sum_only_additive_values(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        by_type = json.loads(text(await client.call_tool("archicad_quantities", {})))
-        csv_text = text(await client.call_tool("archicad_quantities", {"groupBy": "story", "format": "csv"}))
+        by_type = json.loads(text(await client.call_tool("quantities", {})))
+        csv_text = text(await client.call_tool("quantities", {"groupBy": "story", "format": "csv"}))
     walls = next(r for r in by_type["rows"] if r["type"] == "Wall")
     assert walls["count"] == 3 and walls["General_3DLength"] == 12.0
     assert "General_Height" not in walls
@@ -413,7 +413,7 @@ async def test_quantities_sum_only_additive_values(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_check_model(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        report = json.loads(text(await client.call_tool("archicad_check_model", {})))
+        report = json.loads(text(await client.call_tool("check_model", {})))
     assert report["summary"] == {
         "missing_id": 1,
         "duplicate_id": 1,
@@ -436,12 +436,12 @@ def call_json(result):
 @pytest.mark.anyio
 async def test_fix_duplicate_ids_and_undo(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        preview = call_json(await client.call_tool("archicad_set_element_ids", {"fixDuplicates": True, "dryRun": True}))
+        preview = call_json(await client.call_tool("set_element_ids", {"fixDuplicates": True, "dryRun": True}))
         assert ELEMENTS[WALLS[1]][1] == "W-1"
-        done = call_json(await client.call_tool("archicad_set_element_ids", {"fixDuplicates": True}))
+        done = call_json(await client.call_tool("set_element_ids", {"fixDuplicates": True}))
         assert preview["changes"] == done["changes"] == [{"guid": WALLS[1], "type": "Wall", "from": "W-1", "to": "W-1-2"}]
         assert ELEMENTS[WALLS[1]][1] == "W-1-2"
-        undone = call_json(await client.call_tool("archicad_undo", {}))
+        undone = call_json(await client.call_tool("undo", {}))
     assert undone["reverted"][0]["summary"] == "Changed 1 element IDs"
     assert ELEMENTS[WALLS[1]][1] == "W-1"
 
@@ -451,7 +451,7 @@ async def test_fix_duplicate_ids_skips_segments(archicad_port, monkeypatch):
     segments = ["00000000-0000-0000-0000-0000000000S1", "00000000-0000-0000-0000-0000000000S2"]
     ELEMENTS.update({g: ("ColumnSegment", "CSG-1", 0) for g in segments})
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_set_element_ids", {"fixDuplicates": True}))
+        done = call_json(await client.call_tool("set_element_ids", {"fixDuplicates": True}))
     assert [c["guid"] for c in done["changes"]] == [WALLS[1]]
     assert done["skipped"] == segments
     assert [ELEMENTS[g][1] for g in segments] == ["CSG-1", "CSG-1"]
@@ -460,7 +460,7 @@ async def test_fix_duplicate_ids_skips_segments(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_numbering_ids(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        call_json(await client.call_tool("archicad_set_element_ids", {"elementType": "Wall", "numbering": {"prefix": "M-", "digits": 2}}))
+        call_json(await client.call_tool("set_element_ids", {"elementType": "Wall", "numbering": {"prefix": "M-", "digits": 2}}))
     assert [ELEMENTS[w][1] for w in WALLS] == ["M-01", "M-02", "M-03"]
     assert ELEMENTS[ZONE][1] == "Z-1"
 
@@ -469,19 +469,19 @@ async def test_numbering_ids(archicad_port, monkeypatch):
 async def test_create_room_and_undo(archicad_port, monkeypatch):
     square = [{"x": 0, "y": 0}, {"x": 5, "y": 0}, {"x": 5, "y": 4}, {"x": 0, "y": 4}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        plan = call_json(await client.call_tool("archicad_create_room", {"polygon": square, "zoneName": "Living", "dryRun": True}))
+        plan = call_json(await client.call_tool("create_room", {"polygon": square, "zoneName": "Living", "dryRun": True}))
         assert len(plan["plan"]["walls"]) == 4 and plan["plan"]["walls"][3]["endCoordinate"] == {"x": 0, "y": 0}
         assert plan["plan"]["zone"]["geometry"] == {"referencePosition": {"x": 2.5, "y": 2.0}}
         assert len(ELEMENTS) == 4
-        room = call_json(await client.call_tool("archicad_create_room", {"polygon": square, "zoneName": "Living"}))
+        room = call_json(await client.call_tool("create_room", {"polygon": square, "zoneName": "Living"}))
         assert len(room["created"]) == 6 and len(ELEMENTS) == 10
         assert room["zonePlacement"] == "automatic"
         assert MODIFIED_SLABS[0]["structureType"] == "Basic" and MODIFIED_SLABS[0]["thickness"] == 0.2
-        history = call_json(await client.call_tool("archicad_history", {}))
+        history = call_json(await client.call_tool("history", {}))
         assert history[0]["summary"] == "Created room Living (6 elements) on story 0"
-        call_json(await client.call_tool("archicad_undo", {}))
+        call_json(await client.call_tool("undo", {}))
         assert len(ELEMENTS) == 4
-        assert call_json(await client.call_tool("archicad_history", {})) == []
+        assert call_json(await client.call_tool("history", {})) == []
 
 
 @pytest.mark.anyio
@@ -489,8 +489,8 @@ async def test_read_only_mode_hides_edit_tools(archicad_port, monkeypatch):
     server = make_server(archicad_port, monkeypatch, ARCHICAD_MCP_READ_ONLY="1")
     async with Client(server) as client:
         names = {t.name for t in (await client.list_tools()).tools}
-        result = await client.call_tool("archicad_undo", {})
-    assert "archicad_history" in names and "archicad_create_room" not in names
+        result = await client.call_tool("undo", {})
+    assert "history" in names and "create_room" not in names
     assert result.is_error and "Read-only" in text(result)
 
 
@@ -499,7 +499,7 @@ async def test_room_on_another_story_uses_inner_outline(archicad_port, monkeypat
     square = [{"x": 0, "y": 0}, {"x": 5, "y": 0}, {"x": 5, "y": 4}, {"x": 0, "y": 4}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
         room = call_json(await client.call_tool(
-            "archicad_create_room",
+            "create_room",
             {"polygon": square, "floorIndex": 1, "zoneName": "Estar", "wallThickness": 0.3, "slabStructure": "default"},
         ))
     assert len(room["created"]) == 6
@@ -513,7 +513,7 @@ async def test_room_on_another_story_uses_inner_outline(archicad_port, monkeypat
 @pytest.mark.anyio
 async def test_element_images(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        result = await client.call_tool("archicad_element_images", {"elements": [
+        result = await client.call_tool("element_images", {"elements": [
             {"elementId": {"guid": WALLS[0]}}, {"elementId": {"guid": ZONE}}
         ]})
     kinds = [c.type for c in result.content]
@@ -529,15 +529,15 @@ async def test_create_slabs_on_new_layer_and_undo(archicad_port, monkeypatch):
     slabs = [{"polygon": square}, {"polygon": [{"x": p["x"] + 20, "y": p["y"]} for p in square],
                                     "holes": [[{"x": 22, "y": 2}, {"x": 24, "y": 2}, {"x": 24, "y": 4}]]}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        plan = call_json(await client.call_tool("archicad_create_slabs", {"slabs": slabs, "topLevel": 5.15, "thickness": 5, "layer": "EMPLAZAMIENTO", "dryRun": True}))
+        plan = call_json(await client.call_tool("create_slabs", {"slabs": slabs, "topLevel": 5.15, "thickness": 5, "layer": "EMPLAZAMIENTO", "dryRun": True}))
         assert plan["bottomLevel"] == 0.15 and len(ELEMENTS) == 4 and len(LAYERS) == 1
-        done = call_json(await client.call_tool("archicad_create_slabs", {"slabs": slabs, "topLevel": 5.15, "thickness": 5, "layer": "EMPLAZAMIENTO"}))
+        done = call_json(await client.call_tool("create_slabs", {"slabs": slabs, "topLevel": 5.15, "thickness": 5, "layer": "EMPLAZAMIENTO"}))
         assert done["created"] == 2 and "created layer 'EMPLAZAMIENTO'" in done["layerNote"]
         assert {LAYER_OF[e["elementId"]["guid"]] for e in done["elements"]} == {2}
         assert [m["thickness"] for m in MODIFIED_SLABS] == [5, 5]
-        again = call_json(await client.call_tool("archicad_create_slabs", {"slabs": slabs[:1], "layer": "EMPLAZAMIENTO"}))
+        again = call_json(await client.call_tool("create_slabs", {"slabs": slabs[:1], "layer": "EMPLAZAMIENTO"}))
         assert "existing layer" in again["layerNote"] and len(LAYERS) == 2
-        call_json(await client.call_tool("archicad_undo", {"steps": 2}))
+        call_json(await client.call_tool("undo", {"steps": 2}))
     assert len(ELEMENTS) == 4
 
 
@@ -545,12 +545,12 @@ async def test_create_slabs_on_new_layer_and_undo(archicad_port, monkeypatch):
 async def test_move_elements_and_undo(archicad_port, monkeypatch):
     walls = [{"elementId": {"guid": g}} for g in WALLS[:2]]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        refused = await client.call_tool("archicad_move_elements", {"vector": {"x": 1, "y": 0}})
+        refused = await client.call_tool("move_elements", {"vector": {"x": 1, "y": 0}})
         assert refused.is_error
-        done = call_json(await client.call_tool("archicad_move_elements", {"elements": walls, "vector": {"x": -2.2, "y": 2.75}}))
+        done = call_json(await client.call_tool("move_elements", {"elements": walls, "vector": {"x": -2.2, "y": 2.75}}))
         assert done["moved"] == 2 and MOVES[0]["moveVector"] == {"x": -2.2, "y": 2.75, "z": 0}
         assert done["problems"] is None
-        undone = call_json(await client.call_tool("archicad_undo", {}))
+        undone = call_json(await client.call_tool("undo", {}))
         assert undone["reverted"][0]["problems"] is None
     assert MOVES[-1]["moveVector"] == {"x": 2.2, "y": -2.75, "z": 0} and len(MOVES) == 4
 
@@ -559,12 +559,12 @@ async def test_move_elements_and_undo(archicad_port, monkeypatch):
 async def test_rotate_elements_and_undo(archicad_port, monkeypatch):
     walls = [{"elementId": {"guid": g}} for g in WALLS[:2]]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_rotate_elements", {"elements": walls, "origin": {"x": 1, "y": 2}, "degrees": 90}))
+        done = call_json(await client.call_tool("rotate_elements", {"elements": walls, "origin": {"x": 1, "y": 2}, "degrees": 90}))
         assert done["rotated"] == 2 and done["problems"] is None
         rot = ROTATIONS[0]["rotation"]
         assert rot["origin"] == {"x": 1, "y": 2} and rot["beginPoint"] == {"x": 11, "y": 2}
         assert abs(rot["endPoint"]["x"] - 1) < 1e-9 and abs(rot["endPoint"]["y"] - 12) < 1e-9
-        call_json(await client.call_tool("archicad_undo", {}))
+        call_json(await client.call_tool("undo", {}))
     back = ROTATIONS[-1]["rotation"]["endPoint"]
     assert abs(back["x"] - 1) < 1e-9 and abs(back["y"] + 8) < 1e-9
 
@@ -573,11 +573,11 @@ async def test_rotate_elements_and_undo(archicad_port, monkeypatch):
 async def test_undo_skips_elements_deleted_meanwhile(archicad_port, monkeypatch):
     square = [{"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 10, "y": 8}, {"x": 0, "y": 8}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_create_slabs", {"slabs": [{"polygon": square}] * 3}))
+        done = call_json(await client.call_tool("create_slabs", {"slabs": [{"polygon": square}] * 3}))
         gone = done["elements"][0]["elementId"]["guid"]
         ELEMENTS.pop(gone)  # e.g. removed with Archicad's own Undo
         deletes_before = sum(1 for r in FakeArchicad.received if r["parameters"].get("addOnCommandId", {}).get("commandName") == "DeleteElements")
-        undone = call_json(await client.call_tool("archicad_undo", {}))
+        undone = call_json(await client.call_tool("undo", {}))
     item = undone["reverted"][0]
     assert item["problems"] is None and item["alreadyGone"] == 1
     sent = [r["parameters"]["addOnCommandParameters"]["elements"] for r in FakeArchicad.received
@@ -590,16 +590,16 @@ async def test_undo_skips_elements_deleted_meanwhile(archicad_port, monkeypatch)
 async def test_set_slab_levels_on_layer_and_undo(archicad_port, monkeypatch):
     square = [{"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 10, "y": 8}, {"x": 0, "y": 8}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        vol = call_json(await client.call_tool("archicad_create_slabs", {"slabs": [{"polygon": square}] * 2, "topLevel": 5.15, "thickness": 5, "layer": "Volumenes"}))
-        call_json(await client.call_tool("archicad_create_slabs", {"slabs": [{"polygon": square}], "topLevel": 0.15, "thickness": 0.15, "layer": "Manzanas"}))
-        plan = call_json(await client.call_tool("archicad_set_slab_levels", {"layer": "Volumenes", "thickness": 2.5, "dryRun": True}))
+        vol = call_json(await client.call_tool("create_slabs", {"slabs": [{"polygon": square}] * 2, "topLevel": 5.15, "thickness": 5, "layer": "Volumenes"}))
+        call_json(await client.call_tool("create_slabs", {"slabs": [{"polygon": square}], "topLevel": 0.15, "thickness": 0.15, "layer": "Manzanas"}))
+        plan = call_json(await client.call_tool("set_slab_levels", {"layer": "Volumenes", "thickness": 2.5, "dryRun": True}))
         assert plan["slabs"] == 2 and plan["to"] == [[0.15, 2.65]]
-        done = call_json(await client.call_tool("archicad_set_slab_levels", {"layer": "Volumenes", "thickness": 2.5}))
+        done = call_json(await client.call_tool("set_slab_levels", {"layer": "Volumenes", "thickness": 2.5}))
         assert done["problems"] is None
         ids = [e["elementId"]["guid"] for e in vol["elements"]]
         assert all(abs(SLABS[g][0] - 2.65) < 1e-9 and SLABS[g][1] == 2.5 for g in ids)
         assert sorted(v for g, v in SLABS.items() if g not in ids) == [(0.15, 0.15)]
-        call_json(await client.call_tool("archicad_undo", {}))
+        call_json(await client.call_tool("undo", {}))
     assert all(SLABS[g] == (5.15, 5) for g in ids)
 
 
@@ -611,17 +611,17 @@ async def test_set_mesh_level_holes_and_undo(archicad_port, monkeypatch):
     MESHES[mesh] = {"level": 1, "skirtLevel": 1, "holes": [], "polygonCoordinates": outline}
     hole = [{"x": 1, "y": 1}, {"x": 2, "y": 1}, {"x": 2, "y": 2}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        plan = call_json(await client.call_tool("archicad_set_mesh", {"guid": mesh, "level": 0.1, "skirtLevel": 0.4, "holes": [hole], "dryRun": True}))
+        plan = call_json(await client.call_tool("set_mesh", {"guid": mesh, "level": 0.1, "skirtLevel": 0.4, "holes": [hole], "dryRun": True}))
         assert plan["change"]["holes"] == 1 and MESHES[mesh]["level"] == 1
-        done = call_json(await client.call_tool("archicad_set_mesh", {"guid": mesh, "level": 0.1, "skirtLevel": 0.4, "holes": [hole]}))
+        done = call_json(await client.call_tool("set_mesh", {"guid": mesh, "level": 0.1, "skirtLevel": 0.4, "holes": [hole]}))
         assert done["problems"] is None and done["z"] == [-0.3, 0.1] and done["previousZ"] == [0, 1]
         assert MESHES[mesh]["holes"][0]["polygonCoordinates"][0] == {"x": 1, "y": 1, "z": 0}
         sent = [r["parameters"]["addOnCommandParameters"] for r in FakeArchicad.received
                 if r["parameters"].get("addOnCommandId", {}).get("commandName") == "ModifyMeshes"][-1]
         assert sent["meshesData"][0]["meshData"]["polygonCoordinates"] == outline  # Tapir needs it to apply holes
-        bad = await client.call_tool("archicad_set_mesh", {"guid": WALLS[0], "level": 0})
+        bad = await client.call_tool("set_mesh", {"guid": WALLS[0], "level": 0})
         assert bad.is_error and "not a Mesh" in text(bad)
-        call_json(await client.call_tool("archicad_undo", {}))
+        call_json(await client.call_tool("undo", {}))
     assert MESHES[mesh]["level"] == 1 and MESHES[mesh]["skirtLevel"] == 1 and MESHES[mesh]["holes"] == []
 
 
@@ -629,16 +629,16 @@ async def test_set_mesh_level_holes_and_undo(archicad_port, monkeypatch):
 async def test_create_meshes_with_heights_and_undo(archicad_port, monkeypatch):
     ground = [{"x": 0, "y": 0, "z": 0}, {"x": 10, "y": 0, "z": 0.4}, {"x": 10, "y": 8, "z": 0.9}, {"x": 0, "y": 8, "z": 0.5}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_create_meshes", {
+        done = call_json(await client.call_tool("create_meshes", {
             "meshes": [{"polygon": ground, "sublines": [[{"x": 5, "y": 4, "z": 0.6}, {"x": 5.01, "y": 4, "z": 0.6}]]}],
             "skirtLevel": 0.5, "layer": "PLAZA - Terreno"}))
         assert done["created"] == 1 and done["surfaceZ"] == [0, 0.9] and done["z"] == [[-0.5, 0.9]]
         g = done["elements"][0]["elementId"]["guid"]
         assert MESHES[g]["skirtType"] == "SolidBodyWithSkirt" and MESHES[g]["sublines"][0]["coordinates"][0]["z"] == 0.6
         assert LAYER_OF[g] == 2
-        changed = call_json(await client.call_tool("archicad_set_mesh", {"guid": g, "sublines": [[{"x": 1, "y": 1, "z": 0.2}, {"x": 1.01, "y": 1, "z": 0.2}]]}))
+        changed = call_json(await client.call_tool("set_mesh", {"guid": g, "sublines": [[{"x": 1, "y": 1, "z": 0.2}, {"x": 1.01, "y": 1, "z": 0.2}]]}))
         assert changed["problems"] is None and MESHES[g]["polygonCoordinates"] == ground
-        call_json(await client.call_tool("archicad_undo", {"steps": 2}))
+        call_json(await client.call_tool("undo", {"steps": 2}))
     assert g not in ELEMENTS
 
 
@@ -646,16 +646,16 @@ async def test_create_meshes_with_heights_and_undo(archicad_port, monkeypatch):
 async def test_create_surface_morph_faces_up_with_material(archicad_port, monkeypatch):
     verts = [{"x": 0, "y": 0, "z": 0.1}, {"x": 1, "y": 0, "z": 0.2}, {"x": 0, "y": 1, "z": 0.3}, {"x": 1, "y": 1, "z": 0.4}]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        bad = await client.call_tool("archicad_create_surface_morph", {"vertices": verts, "triangles": [[0, 1, 2]], "buildingMaterial": "Lava"})
+        bad = await client.call_tool("create_surface_morph", {"vertices": verts, "triangles": [[0, 1, 2]], "buildingMaterial": "Lava"})
         assert bad.is_error and "No building material" in text(bad)
-        done = call_json(await client.call_tool("archicad_create_surface_morph", {
+        done = call_json(await client.call_tool("create_surface_morph", {
             "vertices": verts, "triangles": [[0, 1, 2], [1, 2, 3]], "buildingMaterial": "Gravel", "layer": "PLAZA - Sendero"}))
         assert done["faces"] == 2 and done["problems"] is None
         g = done["elements"][0]["elementId"]["guid"]
         body = MORPHS[g]["body"]
         assert MORPHS[g]["buildingMaterialId"] == {"guid": "MAT-GRAVEL"} and body["bodyType"] == "Surface"
         assert body["polygons"][1]["vertexIds"] == [1, 3, 2]  # flipped to face up
-        call_json(await client.call_tool("archicad_undo", {}))
+        call_json(await client.call_tool("undo", {}))
     assert g not in ELEMENTS
 
 
@@ -665,7 +665,7 @@ async def test_solid_morph_keeps_given_faces(archicad_port, monkeypatch):
          {"x": 0, "y": 0, "z": 0}, {"x": 1, "y": 0, "z": 0}, {"x": 0, "y": 1, "z": 0}]
     sides = [[0, 3, 4, 1], [1, 4, 5, 2], [2, 5, 3, 0], [3, 5, 4]]
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_create_surface_morph", {
+        done = call_json(await client.call_tool("create_surface_morph", {
             "vertices": v, "triangles": [[0, 1, 2]], "faces": sides, "solid": True, "buildingMaterial": "Gravel"}))
     body = MORPHS[done["elements"][0]["elementId"]["guid"]]["body"]
     assert body["bodyType"] == "Solid" and [f["vertexIds"] for f in body["polygons"]][1:] == sides
@@ -674,22 +674,22 @@ async def test_solid_morph_keeps_given_faces(archicad_port, monkeypatch):
 @pytest.mark.anyio
 async def test_classify_elements_by_rule_and_undo(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        items = call_json(await client.call_tool("archicad_classification_items", {"search": "wall"}))
+        items = call_json(await client.call_tool("classification_items", {"search": "wall"}))
         assert items["items"] == ["Site/Wall"]
         rules = [{"item": "Site/Wall", "elementType": "Wall"}]
-        preview = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules, "dryRun": True}))
+        preview = call_json(await client.call_tool("classify_elements", {"rules": rules, "dryRun": True}))
         assert preview["matched"] == 3 and preview["byItem"] == {"Site/Wall": 3} and not CLASSIFIED.get(WALLS[0])
-        done = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules}))
+        done = call_json(await client.call_tool("classify_elements", {"rules": rules}))
         assert done["matched"] == 3 and {CLASSIFIED[w] for w in WALLS} == {"I-WALL"}
-        again = call_json(await client.call_tool("archicad_classify_elements", {"rules": rules}))
+        again = call_json(await client.call_tool("classify_elements", {"rules": rules}))
         assert again["matched"] == 0
         # The zone is already classified: untouched unless overwrite is set.
         zone_rule = [{"item": "Wall", "elementType": "Zone"}]
-        assert call_json(await client.call_tool("archicad_classify_elements", {"rules": zone_rule}))["matched"] == 0
-        assert call_json(await client.call_tool("archicad_classify_elements", {"rules": zone_rule, "overwrite": True}))["matched"] == 1
-        await client.call_tool("archicad_undo", {"steps": 2})
+        assert call_json(await client.call_tool("classify_elements", {"rules": zone_rule}))["matched"] == 0
+        assert call_json(await client.call_tool("classify_elements", {"rules": zone_rule, "overwrite": True}))["matched"] == 1
+        await client.call_tool("undo", {"steps": 2})
         assert CLASSIFIED == {ZONE: "X"}
-        bad = await client.call_tool("archicad_classify_elements", {"rules": [{"item": "Nope"}]})
+        bad = await client.call_tool("classify_elements", {"rules": [{"item": "Nope"}]})
         assert bad.is_error
 
 
@@ -697,8 +697,8 @@ async def test_classify_elements_by_rule_and_undo(archicad_port, monkeypatch):
 async def test_apply_dimension_favorite_and_undo(archicad_port, monkeypatch):
     ELEMENTS[DIM] = ("Dimension", "", 0)
     async with Client(make_server(archicad_port, monkeypatch)) as client:
-        done = call_json(await client.call_tool("archicad_apply_dimension_favorite", {"favoriteName": "Cotas 1:50"}))
+        done = call_json(await client.call_tool("apply_dimension_favorite", {"favoriteName": "Cotas 1:50"}))
         assert done["applied"] == 1 and done["problems"] is None and STYLE[DIM] == "Cotas 1:50"
-        undone = call_json(await client.call_tool("archicad_undo", {}))
+        undone = call_json(await client.call_tool("undo", {}))
     assert undone["reverted"][0]["problems"] is None
     assert STYLE[DIM] == "original" and FAVORITES == {}  # settings restored, snapshot favorite removed

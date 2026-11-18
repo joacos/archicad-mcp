@@ -32,8 +32,8 @@ wheels = [
 ]
 
 [[package]]
-name = "archicad-tapir-mcp"
-version = "0.1.0"
+name = "archicad-mcp"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
