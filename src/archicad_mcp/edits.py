@@ -367,6 +367,7 @@ EDIT_DESCRIPTIONS = {
     ),
     "archicad_history": "Lists the actions archicad_undo can revert in the open project, newest first.",
 }
+FIXED_ID_TYPES = {"ColumnSegment", "BeamSegment"}
 READ_ONLY_EDIT_TOOLS = {"archicad_history", "archicad_classification_items"}
 
 
@@ -625,6 +626,10 @@ class Edits:
         else:
             rows = await self.insights.rows(await self.insights.resolve_scope(args))
             wanted = {}
+        # Archicad rejects ID writes on column/beam segments ("Element not supported").
+        skipped = [r["guid"] for r in rows if r.get("type") in FIXED_ID_TYPES]
+        rows = [r for r in rows if r.get("type") not in FIXED_ID_TYPES]
+        if not args.get("ids"):
             if args.get("fixDuplicates"):
                 every = await self.insights.rows(await self.insights.resolve_scope({}))
                 taken = {str(r.get("id", "")) for r in every}
@@ -652,15 +657,20 @@ class Edits:
             for r in rows
             if r["guid"] in wanted and "error" not in r and r.get("id", "") != wanted[r["guid"]]
         ]
+        note = {"skipped": skipped} if skipped else {}
         if args.get("dryRun") or not changes:
-            return {"dryRun": bool(args.get("dryRun")), "changes": changes}
+            return {"dryRun": bool(args.get("dryRun")), "changes": changes, **note}
         problems = await self.write_ids([{"guid": c["guid"], "id": c["to"]} for c in changes])
+        failed = {p.split(":", 1)[0] for p in problems}
+        changes = [c for c in changes if c["guid"] not in failed]
+        if not changes:
+            return {"changes": [], "problems": problems or None, **note}
         entry = await self.record(
             "archicad_set_element_ids",
             f"Changed {len(changes)} element IDs",
             [{"op": "setIds", "values": [{"guid": c["guid"], "id": c["from"]} for c in changes]}],
         )
-        return {"changes": changes, "problems": problems or None, "undoId": entry}
+        return {"changes": changes, "problems": problems or None, "undoId": entry, **note}
 
     # -- classifications ---------------------------------------------------
 

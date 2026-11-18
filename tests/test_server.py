@@ -447,6 +447,17 @@ async def test_fix_duplicate_ids_and_undo(archicad_port, monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_fix_duplicate_ids_skips_segments(archicad_port, monkeypatch):
+    segments = ["00000000-0000-0000-0000-0000000000S1", "00000000-0000-0000-0000-0000000000S2"]
+    ELEMENTS.update({g: ("ColumnSegment", "CSG-1", 0) for g in segments})
+    async with Client(make_server(archicad_port, monkeypatch)) as client:
+        done = call_json(await client.call_tool("archicad_set_element_ids", {"fixDuplicates": True}))
+    assert [c["guid"] for c in done["changes"]] == [WALLS[1]]
+    assert done["skipped"] == segments
+    assert [ELEMENTS[g][1] for g in segments] == ["CSG-1", "CSG-1"]
+
+
+@pytest.mark.anyio
 async def test_numbering_ids(archicad_port, monkeypatch):
     async with Client(make_server(archicad_port, monkeypatch)) as client:
         call_json(await client.call_tool("archicad_set_element_ids", {"elementType": "Wall", "numbering": {"prefix": "M-", "digits": 2}}))
