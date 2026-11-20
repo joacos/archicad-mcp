@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "archicad-mcp"
-version = "0.4.0"
+version = "0.5.0"
 description = "MCP server to work with a running Archicad through the JSON API and the Tapir add-on"
 readme = "README.md"
 license = "MIT"

@@ -1,6 +1,6 @@
 {
   "name": "archicad",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Work with a running Archicad from Claude: read, quantify, check and edit the open model through the JSON API and the Tapir add-on, with undo for every change.",
   "author": { "name": "joacos" },
   "repository": "https://github.com/joacos/archicad-mcp",
