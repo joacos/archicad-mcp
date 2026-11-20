@@ -6,44 +6,11 @@ Servidor MCP que permite a Claude (u otro cliente MCP) trabajar con un Archicad 
 
 1. **Archicad 25 a 30** (Windows o macOS) con un proyecto abierto.
 2. **Add-on Tapir** instalado: descargá el [instalador para Windows](https://github.com/ENZYME-APD/tapir-archicad-automation/releases/latest/download/TapirInstaller_Win.exe) o [para macOS](https://github.com/ENZYME-APD/tapir-archicad-automation/releases/latest/download/TapirInstaller_Mac.zip) y reiniciá Archicad.
-3. **Python 3.10 o superior**.
+3. **[uv](https://docs.astral.sh/uv/getting-started/installation/)**: baja Python y el servidor solo, no hace falta instalar nada más.
 
 ## Instalación
 
-Desde la carpeta de este proyecto:
-
-```bash
-python -m pip install .
-```
-
-## Instalación como plugin de Claude
-
-En Claude Code, sin instalar nada a mano (requiere [uv](https://docs.astral.sh/uv/)):
-
-```
-/plugin marketplace add joacos/archicad-mcp
-/plugin install archicad@archicad-mcp
-```
-
-Si tenías instalada la versión anterior con el nombre `archicad-tapir`, desinstalala primero: `/plugin uninstall archicad-tapir@archicad-mcp`. Desde la 0.3.0 las tools no llevan el prefijo `archicad_` (`status`, `model_summary`, `undo`…).
-
-El plugin arranca el servidor con `uvx` desde este repositorio e instala el skill `archicad` ([skills/archicad/SKILL.md](skills/archicad/SKILL.md)), que le enseña a Claude qué tools usar, cuáles se pueden revertir y qué evitar. Si ya lo registraste a mano como `archicad`, quitá esa entrada para no tenerlo duplicado.
-
-### Skill en claude.ai / Claude Desktop
-
-Armá un zip con `SKILL.md` en el nivel superior (sin carpetas adentro) y subilo en Configuración > Capacidades > Skills:
-
-```bash
-cd skills/archicad && zip ../../archicad-skill.zip SKILL.md
-```
-
-En el repo el skill queda en `skills/archicad/SKILL.md` porque el plugin de Claude Code lo busca ahí; no lo muevas.
-
-El skill necesita el servidor MCP configurado (ver abajo).
-
-## Instalación en Antigravity
-
-1. Servidor MCP: en Antigravity, menú `...` del panel del agente > MCP Servers > Manage MCP Servers > View raw config, y agregá a `~/.gemini/antigravity/mcp_config.json`:
+Todos los clientes usan la misma configuración. El servidor le pasa a Claude sus instrucciones (qué tools usar, cuáles se pueden revertir y qué evitar), así que no hay skill aparte que instalar.
 
 ```json
 {
@@ -56,34 +23,20 @@ El skill necesita el servidor MCP configurado (ver abajo).
 }
 ```
 
-2. Skill, para todos los proyectos:
+- **Claude Desktop**: Configuración > Desarrollador > Editar configuración (`claude_desktop_config.json`). Si Claude Desktop no encuentra `uvx`, poné la ruta completa (`which uvx` en macOS, `where uvx` en Windows).
+- **Antigravity**: menú `...` del panel del agente > MCP Servers > Manage MCP Servers > View raw config (`~/.gemini/antigravity/mcp_config.json`).
+- **Claude Code**, como plugin:
 
-```bash
-mkdir -p ~/.gemini/antigravity/skills && cp -R skills/archicad ~/.gemini/antigravity/skills/
-```
+  ```
+  /plugin marketplace add joacos/archicad-mcp
+  /plugin install archicad@archicad-mcp
+  ```
 
-O solo para un proyecto, copiándolo en `<proyecto>/.agent/skills/archicad`.
+  o a mano: `claude mcp add archicad -- uvx --from git+https://github.com/joacos/archicad-mcp archicad-mcp`. Usá una de las dos, no ambas.
 
-## Configuración en Claude Desktop
+Si tenías la versión anterior con el nombre `archicad-tapir`, desinstalala primero: `/plugin uninstall archicad-tapir@archicad-mcp`. Si subiste el skill `archicad` a claude.ai o lo copiaste en Antigravity, borralo: desde la 0.4.0 esas instrucciones vienen con el servidor.
 
-Editá `claude_desktop_config.json` (Configuración > Desarrollador > Editar configuración) y agregá:
-
-```json
-{
-  "mcpServers": {
-    "archicad": {
-      "command": "python",
-      "args": ["-m", "archicad_mcp"]
-    }
-  }
-}
-```
-
-En macOS el comando suele ser `python3`, o la ruta del entorno virtual donde lo instalaste (por ejemplo `/ruta/al/proyecto/.venv/bin/python`). En Windows, si `python` no está en el PATH, usá la ruta completa, por ejemplo `"C:\\Users\\TuUsuario\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"`.
-
-En Claude Code: `claude mcp add archicad -- python -m archicad_mcp`.
-
-Reiniciá Claude y pedile, por ejemplo: "¿Qué elementos tengo seleccionados en Archicad?" o "Creá cuatro muros de 3 m de alto formando un rectángulo de 5 × 4 m". Si algo no anda, pedile que ejecute `status`.
+Reiniciá el cliente y pedile, por ejemplo: "¿Qué elementos tengo seleccionados en Archicad?" o "Creá cuatro muros de 3 m de alto formando un rectángulo de 5 × 4 m". Si algo no anda, pedile que ejecute `status`.
 
 ## Herramientas que expone
 
@@ -122,12 +75,12 @@ Las cuatro tools `model_summary`, `list_elements`, `quantities` y `check_model` 
 | `ARCHICAD_TIMEOUT` | `120` | Segundos de espera por comando. |
 | `ARCHICAD_MCP_MAX_CHARS` | `100000` | Largo máximo de cada respuesta; lo que exceda se recorta. |
 
-Ejemplo en Claude Desktop:
+Ejemplo:
 
 ```json
 "archicad": {
-  "command": "python",
-  "args": ["-m", "archicad_mcp"],
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/joacos/archicad-mcp", "archicad-mcp"],
   "env": { "ARCHICAD_MCP_READ_ONLY": "1" }
 }
 ```

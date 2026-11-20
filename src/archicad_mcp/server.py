@@ -40,22 +40,58 @@ from .insights import DESCRIPTIONS, SCHEMAS, Insights
 
 INSTRUCTIONS = """\
 Controls a running Archicad through its JSON API and the Tapir add-on.
-Start with status if unsure Archicad is reachable, and with model_summary
-to understand the open project. Prefer list_elements, quantities and
-check_model over raw commands: they answer in one call with compact
-results. For changes, prefer the snake_case edit tools (set_element_ids,
-create_room, move_elements...): history lists them and undo reverts
-them, which raw Tapir commands do not. Avoid SetStories: it rebuilds the story
-structure and has deleted elements in a real project. Use dryRun to
-show the user large changes before applying them. When calling
-GetDetailsOfElements, pass "fields" to get only what you need. Elements are
-identified by {"elementId": {"guid": "..."}}; get them from
-GetSelectedElements, GetElementsByType or FilterElements, then pass them to
-detail, property, classification or modification commands. Commands not
-exposed as their own tool are reachable with tapir_list_commands,
-tapir_describe_command and tapir_run_command. Lengths are in meters and
-angles in radians. Ask the user before deleting elements or making large
-changes to their model.
+
+Before you start:
+- status checks that Archicad answers and which Tapir version is installed.
+  If it fails: Archicad is closed, Tapir is not installed, or several
+  Archicads are open (set ARCHICAD_PORT).
+- model_summary gives stories, element counts by type/story/layer, zones
+  and the current selection. Use it to get oriented before anything else.
+
+Reading the model: prefer these over raw commands, they answer in one call
+with compact results.
+- list_elements: guid, type, ID, story, layer.
+- quantities: lengths, areas, volumes by type, grouped by story or layer,
+  as JSON or CSV (CSV when the user wants a spreadsheet).
+- check_model: empty/duplicate IDs, unclassified elements, duplicates,
+  hidden layers, zones without area.
+- classification_items, element_images, GetSelectedElements.
+- With GetDetailsOfElements, always pass "fields" to get only what you need.
+
+Changing the model: set_element_ids, create_room, create_slabs,
+set_slab_levels, create_meshes, set_mesh, create_surface_morph,
+move_elements, rotate_elements, classify_elements and
+apply_dimension_favorite accept dryRun and are recorded in a journal:
+history lists them and undo reverts them, even after a restart. Prefer
+them over CreateWalls, MoveElements and other raw commands, which undo
+cannot revert. For large changes, run with dryRun first, show the result
+and ask for confirmation. Column and beam segment IDs cannot be changed
+through the API; set_element_ids lists them under "skipped". create_room
+places the zone automatically only on the story open on screen; on other
+stories it draws it along the inner outline of the walls.
+
+Rules:
+- Never use SetStories: it rebuilds the story structure and has deleted
+  elements in a real project.
+- Ask before deleting elements (DeleteElements) or making large changes.
+- Lengths are in meters and angles in radians.
+- Elements are identified as {"elementId": {"guid": "..."}}; get them from
+  GetSelectedElements, GetElementsByType, FilterElements or list_elements,
+  then pass them to detail, property, classification or modification
+  commands.
+- Commands without their own tool: tapir_list_commands (filter by group or
+  text), then tapir_describe_command (schema), then tapir_run_command
+  (validates before sending). Official API.* commands: run_api_command.
+
+Typical flows:
+- "What do I have selected?": GetSelectedElements, then list_elements or
+  GetDetailsOfElements with fields.
+- Clean up IDs: check_model, then set_element_ids with fixDuplicates or
+  numbering (e.g. prefix FU-), dryRun first.
+- Create a room: create_room with the outline, wall height and slab
+  thickness; dryRun first if anything is unclear.
+
+Reply in the user's language.
 """
 
 def tool(name: str, description: str, schema: dict[str, Any], **hints: Any) -> types.Tool:
