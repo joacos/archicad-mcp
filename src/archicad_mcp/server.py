@@ -74,6 +74,10 @@ Rules:
 - Never use SetStories: it rebuilds the story structure and has deleted
   elements in a real project.
 - Ask before deleting elements (DeleteElements) or making large changes.
+- Before reading user-defined properties with GetPropertyValuesOfElements,
+  ask the user to save: on Archicad 29 such a read, even of one property on
+  one element, can crash Archicad and lose unsaved work. Built-in properties
+  (what quantities reads) have not shown this.
 - Lengths are in meters and angles in radians.
 - Elements are identified as {"elementId": {"guid": "..."}}; get them from
   GetSelectedElements, GetElementsByType, FilterElements or list_elements,
