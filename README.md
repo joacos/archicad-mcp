@@ -96,15 +96,13 @@ git clone --depth 1 https://github.com/ENZYME-APD/tapir-archicad-automation
 python scripts/build_catalog.py tapir-archicad-automation
 ```
 
-## Armar la extensión de Claude Desktop
-
-Al subir de versión, cambiala también en `manifest.json`. Después:
+## Publicar una versión
 
 ```bash
-npx @anthropic-ai/mcpb pack . archicad-$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])").mcpb
+scripts/release.sh 0.5.0
 ```
 
-y subí el `.mcpb` a una release de GitHub. Pesa ~400 KB: lleva solo el código, y Claude Desktop instala las dependencias con `uv` la primera vez.
+Cambia la versión en `pyproject.toml`, `uv.lock`, `__init__.py`, `manifest.json` y `plugin.json`, corre los tests, commitea, pushea a `main`, arma la extensión de Claude Desktop (`archicad-0.5.0.mcpb`) y la publica como release de GitHub. Necesita `uv`, `npx` y `gh` con sesión iniciada. El `.mcpb` pesa ~400 KB: lleva solo el código, y Claude Desktop instala las dependencias con `uv` la primera vez.
 
 ## Tests
 
