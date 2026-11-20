@@ -23,7 +23,9 @@ Todos los clientes usan la misma configuración. El servidor le pasa a Claude su
 }
 ```
 
-- **Claude Desktop**: Configuración > Desarrollador > Editar configuración (`claude_desktop_config.json`). Si Claude Desktop no encuentra `uvx`, poné la ruta completa (`which uvx` en macOS, `where uvx` en Windows).
+- **Claude Desktop**, como extensión: bajá `archicad-<versión>.mcpb` de la [última release](https://github.com/joacos/archicad-mcp/releases/latest) y arrastralo a Configuración > Extensiones. La opción *Solo lectura* aparece en la configuración de la extensión. Para actualizar, instalá el `.mcpb` nuevo encima.
+
+  O a mano, con el JSON de arriba en Configuración > Desarrollador > Editar configuración (`claude_desktop_config.json`). Si Claude Desktop no encuentra `uvx`, poné la ruta completa (`which uvx` en macOS, `where uvx` en Windows). Usá una de las dos, no ambas.
 - **Antigravity**: menú `...` del panel del agente > MCP Servers > Manage MCP Servers > View raw config (`~/.gemini/antigravity/mcp_config.json`).
 - **Claude Code**, como plugin:
 
@@ -93,6 +95,16 @@ Los schemas vienen de la documentación de Tapir (versión 2.0.0). Cuando salga 
 git clone --depth 1 https://github.com/ENZYME-APD/tapir-archicad-automation
 python scripts/build_catalog.py tapir-archicad-automation
 ```
+
+## Armar la extensión de Claude Desktop
+
+Al subir de versión, cambiala también en `manifest.json`. Después:
+
+```bash
+npx @anthropic-ai/mcpb pack . archicad-$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])").mcpb
+```
+
+y subí el `.mcpb` a una release de GitHub. Pesa ~400 KB: lleva solo el código, y Claude Desktop instala las dependencias con `uv` la primera vez.
 
 ## Tests
 

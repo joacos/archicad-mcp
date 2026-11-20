@@ -1,0 +1,34 @@
+{
+  "manifest_version": "0.4",
+  "name": "archicad",
+  "display_name": "Archicad",
+  "version": "0.4.0",
+  "description": "Read, quantify, check and edit a running Archicad model through the JSON API and the Tapir add-on, with undo for every change.",
+  "author": { "name": "joacos" },
+  "repository": { "type": "git", "url": "https://github.com/joacos/archicad-mcp.git" },
+  "documentation": "https://github.com/joacos/archicad-mcp#readme",
+  "license": "MIT",
+  "keywords": ["archicad", "bim", "architecture", "tapir"],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/archicad_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--frozen", "--no-dev", "--directory", "${__dirname}", "archicad-mcp"],
+      "env": { "ARCHICAD_MCP_READ_ONLY": "${user_config.read_only}" }
+    }
+  },
+  "user_config": {
+    "read_only": {
+      "type": "boolean",
+      "title": "Solo lectura",
+      "description": "Rechaza todo comando que pueda modificar el modelo.",
+      "default": false,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": { "python": ">=3.10" }
+  }
+}
